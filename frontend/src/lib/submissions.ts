@@ -32,3 +32,62 @@ export function submitForm(formTemplateId: number, answers: Record<number, strin
     { formTemplateId, answers },
   );
 }
+
+export type DraftSummary = {
+  id: number;
+  formTemplateId: number;
+  formName: string;
+  formAvailable: boolean;
+  answerCount: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type Submission = {
+  id: number;
+  formTemplateId: number;
+  formName: string;
+  formAvailable: boolean;
+  status: "DRAFT" | "SUBMITTED";
+  // Null for drafts; the code is a receipt only after submitting.
+  referenceCode: string | null;
+  createdAt: string;
+  updatedAt: string;
+  submittedAt: string | null;
+  answers: { fieldId: number; label: string; value: string | null }[];
+};
+
+const draftConflict =
+  "Luonnosta ei voi enää muuttaa: se on jo lähetetty tai lomake ei ole tällä hetkellä käytettävissä.";
+
+export function listDrafts() {
+  return apiRequest<{ drafts: DraftSummary[] }>("GET", "/api/submissions/drafts");
+}
+
+export function getSubmission(id: number) {
+  return apiRequest<{ submission: Submission }>("GET", `/api/submissions/${id}`);
+}
+
+/** Creates a draft, or updates `draftId`. Empty values clear saved answers. */
+export function saveDraft(
+  formTemplateId: number,
+  draftId: number | undefined,
+  answers: Record<number, string>,
+) {
+  return apiRequest<{ submission: Submission }>(
+    "POST",
+    "/api/submissions/draft",
+    draftId ? { id: draftId, answers } : { formTemplateId, answers },
+    draftConflict,
+  );
+}
+
+/** Saves the latest answers and submits the draft in one request. */
+export function submitDraft(draftId: number, answers: Record<number, string>) {
+  return apiRequest<{ submission: Submission }>(
+    "POST",
+    `/api/submissions/${draftId}/submit`,
+    { answers },
+    draftConflict,
+  );
+}

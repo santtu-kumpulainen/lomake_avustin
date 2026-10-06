@@ -46,6 +46,48 @@ function checkValue(field: FieldDefinition, value: string): { value: string } | 
 }
 
 /**
+ * Draft rules: only the sent keys are checked, required fields may stay empty, and an empty
+ * value means "clear this answer". Type checks are the same as on submit, so a draft never
+ * stores a value that would be invalid later.
+ */
+export function validateDraftAnswers(
+  body: unknown,
+  fields: FieldDefinition[],
+): { answers: Answer[]; cleared: number[]; errors: FieldErrors } {
+  const errors: FieldErrors = {};
+  const answers: Answer[] = [];
+  const cleared: number[] = [];
+
+  if (body === undefined) return { answers, cleared, errors };
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    return { answers, cleared, errors: { answers: "invalid" } };
+  }
+  const byId = new Map(fields.map((field) => [String(field.id), field]));
+
+  for (const [key, raw] of Object.entries(body as Record<string, unknown>)) {
+    const field = byId.get(key);
+    if (!field) {
+      errors[key] = "unknown_field";
+      continue;
+    }
+    if (raw !== null && typeof raw !== "string") {
+      errors[key] = "invalid";
+      continue;
+    }
+    const value = (raw ?? "").trim();
+    if (!value) {
+      cleared.push(field.id);
+      continue;
+    }
+    const result = checkValue(field, value);
+    if ("error" in result) errors[key] = result.error;
+    else answers.push({ fieldId: field.id, value: result.value });
+  }
+
+  return { answers, cleared, errors };
+}
+
+/**
  * `body` is `{ [fieldId]: string | null }`. Empty optional answers are skipped, so only
  * real answers are stored. Ids that are not fields of this template are rejected.
  */
