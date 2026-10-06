@@ -1,15 +1,36 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type SubmitEvent } from "react";
-import { getTemplate, type FieldErrors, type FormField, type FormTemplate } from "@/lib/forms";
-import { checkAnswers, submitForm, type SubmittedForm } from "@/lib/submissions";
+import {
+  getTemplate,
+  type ApiResult,
+  type FieldErrors,
+  type FormField,
+  type FormTemplate,
+} from "@/lib/forms";
+import {
+  checkAnswers,
+  getSubmission,
+  saveDraft,
+  submitDraft,
+  submitForm,
+  type Submission,
+} from "@/lib/submissions";
 import { ErrorMessage } from "@/components/admin/parts";
-import { borderFor, inputClass, primaryButton } from "@/components/admin/styles";
+import { borderFor, inputClass, primaryButton, secondaryButton } from "@/components/admin/styles";
 
 const fieldId = (field: FormField) => `field-${field.id}`;
 
-export function FormFiller({ id }: { id: number }) {
+const formatTime = (iso: string) =>
+  new Date(iso).toLocaleTimeString("fi-FI", { hour: "2-digit", minute: "2-digit" });
+
+type Receipt = { referenceCode: string; submittedAt: string };
+
+/** `draftId` resumes a saved draft; without it the form starts empty. */
+export function FormFiller({ id, draftId }: { id: number; draftId?: number }) {
+  const router = useRouter();
   // undefined = still loading.
   const [template, setTemplate] = useState<FormTemplate>();
   const [loadError, setLoadError] = useState<string>();
@@ -17,17 +38,41 @@ export function FormFiller({ id }: { id: number }) {
   const [values, setValues] = useState<Record<number, string>>({});
   const [errors, setErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string>();
-  const [pending, setPending] = useState(false);
-  const [submitted, setSubmitted] = useState<SubmittedForm>();
+  const [pending, setPending] = useState<"submit" | "draft">();
+  const [submitted, setSubmitted] = useState<Receipt>();
+  // The saved draft being edited, if any, and the confirmation shown after saving.
+  const [draft, setDraft] = useState<{ id: number; updatedAt: string }>();
+  const [draftNotice, setDraftNotice] = useState<string>();
   const summaryRef = useRef<HTMLDivElement>(null);
   const successRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
-    getTemplate(id).then((result) => {
-      if (result.ok) setTemplate(result.data.template);
-      else setLoadError(result.formError);
-    });
-  }, [id]);
+    async function load() {
+      const [templateResult, draftResult] = await Promise.all([
+        getTemplate(id),
+        draftId ? getSubmission(draftId) : undefined,
+      ]);
+      if (!templateResult.ok) {
+        setLoadError(templateResult.formError);
+        return;
+      }
+      if (draftResult) {
+        const saved = draftResult.ok ? draftResult.data.submission : undefined;
+        if (!saved || saved.formTemplateId !== id) {
+          setLoadError("Luonnosta ei löytynyt.");
+          return;
+        }
+        if (saved.status === "SUBMITTED") {
+          setLoadError(`Tämä lomake on jo lähetetty. Viitekoodi: ${saved.referenceCode}.`);
+          return;
+        }
+        setDraft({ id: saved.id, updatedAt: saved.updatedAt });
+        setValues(Object.fromEntries(saved.answers.map((answer) => [answer.fieldId, answer.value ?? ""])));
+      }
+      setTemplate(templateResult.data.template);
+    }
+    load();
+  }, [id, draftId]);
 
   useEffect(() => {
     if (submitted) successRef.current?.focus();
@@ -88,21 +133,7 @@ export function FormFiller({ id }: { id: number }) {
     requestAnimationFrame(() => summaryRef.current?.focus());
   }
 
-  async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const clientErrors = checkAnswers(fields, values);
-    if (Object.keys(clientErrors).length > 0) {
-      showErrors(clientErrors);
-      return;
-    }
-
-    setPending(true);
-    const result = await submitForm(id, values);
-    setPending(false);
-    if (result.ok) {
-      setSubmitted(result.data.submission);
-      return;
-    }
+  function showFailure(result: Extract<ApiResult<unknown>, { ok: false }>) {
     // Errors not tied to a visible field (e.g. the form changed meanwhile) go to the summary.
     const known = new Set(fields.map((field) => String(field.id)));
     const fieldErrors: FieldErrors = {};
@@ -115,12 +146,62 @@ export function FormFiller({ id }: { id: number }) {
     showErrors(fieldErrors, message);
   }
 
+  async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setDraftNotice(undefined);
+    const clientErrors = checkAnswers(fields, values);
+    if (Object.keys(clientErrors).length > 0) {
+      showErrors(clientErrors);
+      return;
+    }
+
+    setPending("submit");
+    // A draft is submitted through its own record so it leaves the draft list.
+    const result = draft ? await submitDraft(draft.id, values) : await submitForm(id, values);
+    setPending(undefined);
+    if (result.ok) {
+      const { referenceCode, submittedAt } = result.data.submission;
+      setSubmitted({ referenceCode: referenceCode!, submittedAt: submittedAt! });
+      return;
+    }
+    showFailure(result);
+  }
+
+  // Saving a draft skips the required-field check on purpose; incomplete forms can be saved.
+  async function handleSaveDraft() {
+    setPending("draft");
+    setDraftNotice(undefined);
+    const result = await saveDraft(id, draft?.id, values);
+    setPending(undefined);
+    if (!result.ok) {
+      showFailure(result);
+      return;
+    }
+    const saved: Submission = result.data.submission;
+    setErrors({});
+    setFormError(undefined);
+    setDraft({ id: saved.id, updatedAt: saved.updatedAt });
+    setDraftNotice(
+      `Luonnos tallennettu klo ${formatTime(saved.updatedAt)}. Voit jatkaa myöhemmin Lomakkeet-sivun kohdasta Keskeneräiset luonnokset.`,
+    );
+    // Keep the draft in the URL so a reload continues the same draft.
+    if (!draft) router.replace(`/forms/${id}?draft=${saved.id}`, { scroll: false });
+  }
+
   const errorFields = fields.filter((field) => errors[field.id]);
   const hasErrors = errorFields.length > 0 || Boolean(formError);
 
   return (
     <>
       <h1 className="mt-6 text-3xl font-semibold tracking-tight">{template.name}</h1>
+      {draft && (
+        <p className="mt-3 flex items-center gap-3 text-sm text-neutral-600">
+          <span className="border border-neutral-400 px-2 py-0.5 text-xs font-medium text-neutral-700">
+            Luonnos
+          </span>
+          Tallennettu {new Date(draft.updatedAt).toLocaleString("fi-FI")}. Ei vielä lähetetty.
+        </p>
+      )}
       {template.description && (
         <p className="mt-2 whitespace-pre-line text-neutral-600">{template.description}</p>
       )}
@@ -164,9 +245,22 @@ export function FormFiller({ id }: { id: number }) {
             onChange={(value) => setValue(field, value)}
           />
         ))}
-        <button type="submit" disabled={pending} className={primaryButton}>
-          {pending ? "Lähetetään…" : "Lähetä lomake"}
-        </button>
+        <div className="flex flex-wrap gap-3">
+          <button type="submit" disabled={Boolean(pending)} className={primaryButton}>
+            {pending === "submit" ? "Lähetetään…" : "Lähetä lomake"}
+          </button>
+          <button
+            type="button"
+            onClick={handleSaveDraft}
+            disabled={Boolean(pending)}
+            className={secondaryButton}
+          >
+            {pending === "draft" ? "Tallennetaan…" : "Tallenna luonnos"}
+          </button>
+        </div>
+        <p role="status" className="text-sm text-neutral-700">
+          {draftNotice}
+        </p>
       </form>
     </>
   );

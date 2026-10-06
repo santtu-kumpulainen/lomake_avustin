@@ -148,7 +148,7 @@ This needs shell access to the backend, so the API has no role escalation path. 
 docker compose exec backend npm test
 ```
 
-Integration tests run against the configured MariaDB, create `@example.test` users, test form templates and submissions, and delete them afterwards.
+Integration tests run against the configured MariaDB, create `@example.test` users, test form templates, drafts and submissions, and delete them afterwards.
 
 After pulling dependency changes, rebuild the backend so its container `node_modules` volume is refreshed: `docker compose up -d --build -V backend`.
 
@@ -179,9 +179,14 @@ Signed-in users pick a published form at `/forms` and fill it in at `/forms/[id]
 | Endpoint | Description |
 | --- | --- |
 | `POST /api/submissions` | `{ formTemplateId, answers: { [fieldId]: string } }` -> `201 { submission }` with `status: "SUBMITTED"`, `submittedAt` and a `referenceCode` such as `LA-7F42K9` |
-| `GET /api/submissions/:id` | The signed-in user's own submission with its answers; `404` for anyone else |
+| `POST /api/submissions/draft` | `{ formTemplateId, answers? }` creates a draft, `{ id, answers? }` updates the user's own draft |
+| `GET /api/submissions/drafts` | The signed-in user's drafts |
+| `GET /api/submissions/:id` | The signed-in user's own draft or submission with its answers; `404` for anyone else |
+| `POST /api/submissions/:id/submit` | `{ answers? }`, validates the whole draft and submits it |
 
-The backend validates every answer against the stored field definitions: required fields, numbers (a decimal comma is accepted and stored as a dot), real `YYYY-MM-DD` dates, and SELECT values from the options. Ids that are not fields of the form are rejected. Errors are `400 { error, fields: { [fieldId]: code } }`, and nothing is saved unless the whole submission is valid. Unpublished forms return `404`, also for admins. Draft saving is not implemented yet.
+The backend validates every answer against the stored field definitions: required fields, numbers (a decimal comma is accepted and stored as a dot), real `YYYY-MM-DD` dates, and SELECT values from the options. Ids that are not fields of the form are rejected. Errors are `400 { error, fields: { [fieldId]: code } }`, and nothing is saved unless the whole submission is valid. Unpublished forms return `404`, also for admins.
+
+Drafts: "Tallenna luonnos" saves an incomplete form, and the forms page lists the user's drafts to continue. Draft answers are merged (sent fields are saved, empty values clear an answer, others stay) and type-checked, but required fields may stay empty. Submitting a draft runs the full validation; on any error nothing changes and it stays a draft. A draft's reference code is shown only after it is submitted. If its form is unpublished, the draft is kept but cannot be changed or submitted until the form is published again.
 
 ## Running without Docker
 
