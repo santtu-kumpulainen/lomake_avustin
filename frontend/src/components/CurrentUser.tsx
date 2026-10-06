@@ -46,6 +46,13 @@ export function CurrentUser() {
           {roleLabels[user.role]} <span className="text-neutral-500">({user.role})</span>
         </dd>
       </dl>
+      {user.role === "ADMIN" && (
+        <p className="mt-5 text-sm">
+          <Link href="/admin/forms" className="font-medium underline underline-offset-4">
+            Hallitse lomakepohjia
+          </Link>
+        </p>
+      )}
       <button
         type="button"
         onClick={handleLogout}
