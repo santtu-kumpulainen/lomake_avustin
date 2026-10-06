@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Environment files (keep only examples)
+.env
+.env.*
+!.env.example
+
+# Build output
+.next/
+out/
+dist/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+
+# Local Claude instructions
+CLAUDE.md
+
+# Logs
+*.log
+
+# OS / editor
+.DS_Store
+*.pem

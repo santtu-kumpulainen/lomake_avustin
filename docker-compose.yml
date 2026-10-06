@@ -1,0 +1,57 @@
+name: lomakeavustin
+
+services:
+  frontend:
+    build: ./frontend
+    environment:
+      BACKEND_URL: http://backend:4000
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-3000}:3000"
+    volumes:
+      # :z relabels the bind mount for SELinux (Fedora).
+      - ./frontend:/app:z
+      # Keep the container's own node_modules and build cache.
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      - backend
+
+  backend:
+    build: ./backend
+    environment:
+      PORT: 4000
+      DB_HOST: mariadb
+      DB_PORT: 3306
+      DB_USER: ${MARIADB_USER:?set in .env}
+      DB_PASSWORD: ${MARIADB_PASSWORD:?set in .env}
+      DB_NAME: ${MARIADB_DATABASE:?set in .env}
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-4000}:4000"
+    volumes:
+      - ./backend:/app:z
+      - /app/node_modules
+    depends_on:
+      mariadb:
+        condition: service_healthy
+
+  mariadb:
+    image: mariadb:11.8
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:?set in .env}
+      MARIADB_DATABASE: ${MARIADB_DATABASE:?set in .env}
+      MARIADB_USER: ${MARIADB_USER:?set in .env}
+      MARIADB_PASSWORD: ${MARIADB_PASSWORD:?set in .env}
+    ports:
+      - "127.0.0.1:${MARIADB_HOST_PORT:-3307}:3306"
+    volumes:
+      - mariadb_data:/var/lib/mysql
+      # SQL files here run only on the first start with an empty volume.
+      - ./database/init:/docker-entrypoint-initdb.d:ro,z
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  mariadb_data:
