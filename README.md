@@ -148,7 +148,7 @@ This needs shell access to the backend, so the API has no role escalation path. 
 docker compose exec backend npm test
 ```
 
-Integration tests run against the configured MariaDB, create `@example.test` users and test form templates, and delete them afterwards.
+Integration tests run against the configured MariaDB, create `@example.test` users, test form templates and submissions, and delete them afterwards.
 
 After pulling dependency changes, rebuild the backend so its container `node_modules` volume is refreshed: `docker compose up -d --build -V backend`.
 
@@ -171,6 +171,17 @@ ADMIN users manage form templates at `/admin/forms` (linked from the home page f
 | `PUT /api/forms/:id/fields/order` | ADMIN | `{ fieldIds }`, must list every field of the template once |
 
 Field types are `TEXT`, `NUMBER`, `DATE` and `SELECT`. `SELECT` requires a non-empty list of unique `options`; other types must not have options. A template's structure can only be changed while it is a `DRAFT`, so published forms never change under a user filling them. Validation errors use the same `400 { error, fields }` format as authentication.
+
+## Filling in forms
+
+Signed-in users pick a published form at `/forms` and fill it in at `/forms/[id]`. Fields are rendered from the template returned by the API.
+
+| Endpoint | Description |
+| --- | --- |
+| `POST /api/submissions` | `{ formTemplateId, answers: { [fieldId]: string } }` -> `201 { submission }` with `status: "SUBMITTED"`, `submittedAt` and a `referenceCode` such as `LA-7F42K9` |
+| `GET /api/submissions/:id` | The signed-in user's own submission with its answers; `404` for anyone else |
+
+The backend validates every answer against the stored field definitions: required fields, numbers (a decimal comma is accepted and stored as a dot), real `YYYY-MM-DD` dates, and SELECT values from the options. Ids that are not fields of the form are rejected. Errors are `400 { error, fields: { [fieldId]: code } }`, and nothing is saved unless the whole submission is valid. Unpublished forms return `404`, also for admins. Draft saving is not implemented yet.
 
 ## Running without Docker
 
