@@ -69,6 +69,24 @@ curl http://localhost:3000/api/health
 
 Returns `200` with `{"status":"ok","database":"ok",...}` when the backend and database are reachable, and `503` with `"status":"degraded"` if MariaDB cannot be reached.
 
+## Database
+
+The schema lives in `database/init/001_schema.sql` and is applied automatically the first time MariaDB starts with an empty volume.
+
+| Table | Purpose |
+| --- | --- |
+| `users` | Login identity and role (`USER`, `ADMIN`, `PROFESSIONAL`) |
+| `user_profiles` | One-to-one profile data for a user |
+| `form_templates` | Reusable form definitions (`DRAFT`, `PUBLISHED`, `ARCHIVED`) |
+| `form_fields` | Ordered fields of a template (`TEXT`, `NUMBER`, `DATE`, `SELECT`) |
+| `form_submissions` | A user's draft or submitted form with a reference code such as `LA-7F42K9` |
+| `form_answers` | One answer per field per submission, with a prefilled flag |
+| `customer_contacts` | Synthetic contact history for the professional view |
+
+ER diagram: [`docs/er/lomakeavustin-er.png`](docs/er/lomakeavustin-er.png) (editable source: `docs/er/lomakeavustin-er.drawio`).
+
+Schema changes are not applied to an existing volume. To re-initialize the local database, run `docker compose down -v` and `docker compose up -d`. This deletes all local database data.
+
 ## Running without Docker
 
 Each app has its own `.env.example`. Copy it to `.env`, then run `npm install` and `npm run dev` in `frontend/` or `backend/`.
