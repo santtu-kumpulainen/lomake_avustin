@@ -1,3 +1,5 @@
+import { CurrentUser } from "@/components/CurrentUser";
+
 // Rendered per request so the status reflects the backend right now.
 export const dynamic = "force-dynamic";
 
@@ -25,6 +27,13 @@ export default async function Home() {
       <p className="mt-2 text-neutral-600">
         MVP. Käyttää vain synteettistä dataa.
       </p>
+
+      <section className="mt-10 border-t border-neutral-200 pt-6">
+        <h2 className="text-sm font-medium uppercase tracking-wide text-neutral-500">
+          Kirjautuminen
+        </h2>
+        <CurrentUser />
+      </section>
 
       <section className="mt-10 border-t border-neutral-200 pt-6">
         <h2 className="text-sm font-medium uppercase tracking-wide text-neutral-500">

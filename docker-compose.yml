@@ -25,6 +25,8 @@ services:
       DB_USER: ${MARIADB_USER:?set in .env}
       DB_PASSWORD: ${MARIADB_PASSWORD:?set in .env}
       DB_NAME: ${MARIADB_DATABASE:?set in .env}
+      SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-24}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
     ports:
       - "127.0.0.1:${BACKEND_PORT:-4000}:4000"
     volumes:

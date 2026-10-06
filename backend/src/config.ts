@@ -15,4 +15,9 @@ export const config = {
     password: required("DB_PASSWORD"),
     database: required("DB_NAME"),
   },
+  session: {
+    ttlHours: Number(process.env.SESSION_TTL_HOURS ?? 24),
+    // Must be true when served over HTTPS; plain http://localhost needs false.
+    cookieSecure: process.env.COOKIE_SECURE === "true",
+  },
 };
