@@ -148,9 +148,29 @@ This needs shell access to the backend, so the API has no role escalation path. 
 docker compose exec backend npm test
 ```
 
-Integration tests run against the configured MariaDB, create `@example.test` users and delete them afterwards.
+Integration tests run against the configured MariaDB, create `@example.test` users and test form templates, and delete them afterwards.
 
 After pulling dependency changes, rebuild the backend so its container `node_modules` volume is refreshed: `docker compose up -d --build -V backend`.
+
+## Form templates
+
+ADMIN users manage form templates at `/admin/forms` (linked from the home page for admins).
+
+| Endpoint | Role | Description |
+| --- | --- | --- |
+| `GET /api/forms` | any signed-in | ADMIN gets all templates, other roles only `PUBLISHED` |
+| `GET /api/forms/:id` | any signed-in | Template with fields ordered by position; unpublished is `404` for non-admins |
+| `POST /api/forms` | ADMIN | `{ name, description? }`, creates a `DRAFT` |
+| `PATCH /api/forms/:id` | ADMIN | Update name and description |
+| `DELETE /api/forms/:id` | ADMIN | Delete a draft without submissions |
+| `POST /api/forms/:id/publish` | ADMIN | Requires at least one field |
+| `POST /api/forms/:id/unpublish` | ADMIN | Back to `DRAFT` |
+| `POST /api/forms/:id/fields` | ADMIN | `{ label, description?, fieldType, required?, options? }`, appended last |
+| `PATCH /api/forms/:id/fields/:fieldId` | ADMIN | Partial field update |
+| `DELETE /api/forms/:id/fields/:fieldId` | ADMIN | Delete a field |
+| `PUT /api/forms/:id/fields/order` | ADMIN | `{ fieldIds }`, must list every field of the template once |
+
+Field types are `TEXT`, `NUMBER`, `DATE` and `SELECT`. `SELECT` requires a non-empty list of unique `options`; other types must not have options. A template's structure can only be changed while it is a `DRAFT`, so published forms never change under a user filling them. Validation errors use the same `400 { error, fields }` format as authentication.
 
 ## Running without Docker
 
