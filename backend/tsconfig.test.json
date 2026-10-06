@@ -1,0 +1,9 @@
+{
+  // Type-checks source and tests together; the build uses tsconfig.json (src only).
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true
+  },
+  "include": ["src", "test"]
+}
