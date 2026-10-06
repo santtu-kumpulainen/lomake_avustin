@@ -30,7 +30,10 @@ function isRealDate(value: string): boolean {
 }
 
 /** Returns a normalized value, or an error code. */
-function checkValue(field: FieldDefinition, value: string): { value: string } | { error: string } {
+export function checkValue(
+  field: FieldDefinition,
+  value: string,
+): { value: string } | { error: string } {
   switch (field.fieldType) {
     case "TEXT":
       return value.length > TEXT_MAX ? { error: "too_long" } : { value };
