@@ -24,7 +24,7 @@ type TemplateRow = {
   updated_at: Date;
 };
 
-type FieldRow = {
+export type FieldRow = {
   id: number;
   label: string;
   description: string | null;
@@ -35,7 +35,7 @@ type FieldRow = {
 };
 
 const TEMPLATE_COLUMNS = "id, name, description, status, created_at, updated_at";
-const FIELD_COLUMNS = "id, label, description, field_type, is_required, position, options";
+export const FIELD_COLUMNS = "id, label, description, field_type, is_required, position, options";
 
 function toTemplate(row: TemplateRow) {
   return {
@@ -48,7 +48,7 @@ function toTemplate(row: TemplateRow) {
   };
 }
 
-function toField(row: FieldRow) {
+export function toField(row: FieldRow) {
   return {
     id: row.id,
     label: row.label,

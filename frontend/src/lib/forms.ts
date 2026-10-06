@@ -77,6 +77,17 @@ const fieldMessages: Record<string, Record<string, string>> = {
   },
 };
 
+// Codes from validating a user's answers (POST /api/submissions).
+export const answerMessages: Record<string, string> = {
+  required: "Tämä kenttä on pakollinen.",
+  invalid_number: "Anna luku, esimerkiksi 72 tai 72,5.",
+  invalid_date: "Anna kelvollinen päivämäärä.",
+  invalid_option: "Valitse jokin annetuista vaihtoehdoista.",
+  too_long: "Vastaus on liian pitkä (enintään 5000 merkkiä).",
+  unknown_field: "Lomake on muuttunut. Lataa sivu uudelleen.",
+  invalid: "Tarkista vastaus.",
+};
+
 export type FieldErrors = Record<string, string>;
 
 export type ApiResult<T> =
@@ -88,22 +99,22 @@ export const genericError = "Jotain meni pieleen. Yritä uudelleen.";
 const statusMessages: Record<number, string> = {
   401: "Istunto on päättynyt. Kirjaudu uudelleen sisään.",
   403: "Sinulla ei ole oikeutta tähän toimintoon.",
-  404: "Lomakepohjaa tai kenttää ei löytynyt.",
+  404: "Lomaketta tai kenttää ei löytynyt.",
 };
 
 /**
  * `conflictMessage` is shown for 409, whose cause depends on the action
  * (publishing without fields, editing a published template, deleting a used template).
  */
-async function api<T>(
+export async function apiRequest<T>(
   method: string,
-  path: string,
+  url: string,
   body?: unknown,
   conflictMessage = genericError,
 ): Promise<ApiResult<T>> {
   let res: Response;
   try {
-    res = await fetch(`/api/forms${path}`, {
+    res = await fetch(url, {
       method,
       headers: body !== undefined ? { "Content-Type": "application/json" } : undefined,
       body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -120,12 +131,17 @@ async function api<T>(
   if (res.status === 400 && json.fields) {
     const fieldErrors: FieldErrors = {};
     for (const [field, code] of Object.entries(json.fields as Record<string, string>)) {
-      fieldErrors[field] = fieldMessages[field]?.[code] ?? genericError;
+      // Answer errors are keyed by field id, so they are translated by code alone.
+      fieldErrors[field] = fieldMessages[field]?.[code] ?? answerMessages[code] ?? genericError;
     }
     return { ok: false, status: 400, fieldErrors };
   }
   const formError = res.status === 409 ? conflictMessage : (statusMessages[res.status] ?? genericError);
   return { ok: false, status: res.status, fieldErrors: {}, formError };
+}
+
+function api<T>(method: string, path: string, body?: unknown, conflictMessage?: string) {
+  return apiRequest<T>(method, `/api/forms${path}`, body, conflictMessage);
 }
 
 const editConflict = "Julkaistua lomakepohjaa ei voi muokata. Palauta se ensin luonnokseksi.";
