@@ -91,3 +91,25 @@ export function submitDraft(draftId: number, answers: Record<number, string>) {
     draftConflict,
   );
 }
+
+export type PreviousData = {
+  // When the source submission was sent; null if nothing can be prefilled.
+  submittedAt: string | null;
+  answers: { fieldId: number; value: string }[];
+};
+
+/** Whether the user's own earlier submissions can prefill this form. Returns no values. */
+export function getPreviousDataAvailability(formTemplateId: number) {
+  return apiRequest<{ available: boolean; fieldCount: number }>(
+    "GET",
+    `/api/submissions/previous-data/available?formTemplateId=${formTemplateId}`,
+  );
+}
+
+/** The values themselves. Call only after the user has agreed to use them. */
+export function getPreviousData(formTemplateId: number) {
+  return apiRequest<{ previousData: PreviousData }>(
+    "GET",
+    `/api/submissions/previous-data?formTemplateId=${formTemplateId}`,
+  );
+}

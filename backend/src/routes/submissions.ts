@@ -1,10 +1,11 @@
 import { randomInt } from "node:crypto";
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import type { PoolConnection } from "mariadb";
 import { requireAuth } from "../auth/middleware.js";
 import { pool } from "../db.js";
 import { parseId } from "../forms/validation.js";
 import {
+  checkValue,
   validateAnswers,
   validateDraftAnswers,
   type Answer,
@@ -315,6 +316,86 @@ submissionsRouter.get("/drafts", async (req, res) => {
       updatedAt: row.updated_at,
     })),
   });
+});
+
+// Only `formTemplateId` is accepted. Anything else (e.g. `userId`) is rejected, so the
+// data owner can only ever come from the session.
+function parsePreviousDataQuery(query: Record<string, unknown>) {
+  const errors: FieldErrors = {};
+  for (const key of Object.keys(query)) {
+    if (key !== "formTemplateId") errors[key] = "not_allowed";
+  }
+  const templateId = parseId(query.formTemplateId);
+  if (!templateId) errors.formTemplateId = query.formTemplateId === undefined ? "required" : "invalid";
+  return { templateId, errors };
+}
+
+/**
+ * Previous answers for a form, from the user's own latest SUBMITTED submission of the same
+ * template. Matched by field id, so only fields of this form are returned. Values are checked
+ * against the current field definitions, and ones that are no longer valid (e.g. a removed
+ * SELECT option) are left out. Returns null if the form is not published.
+ */
+async function findPreviousAnswers(userId: number, templateId: number) {
+  const templates: { status: string }[] = await pool.query(
+    "SELECT status FROM form_templates WHERE id = ?",
+    [templateId],
+  );
+  if (templates[0]?.status !== "PUBLISHED") return null;
+
+  const submissions: { id: number; submitted_at: Date }[] = await pool.query(
+    `SELECT id, submitted_at FROM form_submissions
+      WHERE user_id = ? AND form_template_id = ? AND status = 'SUBMITTED'
+      ORDER BY submitted_at DESC, id DESC
+      LIMIT 1`,
+    [userId, templateId],
+  );
+  const latest = submissions[0];
+  if (!latest) return { submittedAt: null, answers: [] as Answer[] };
+
+  const rows: (FieldRow & { answer_value: string | null })[] = await pool.query(
+    `SELECT f.id, f.label, f.description, f.field_type, f.is_required, f.position, f.options,
+            a.answer_value
+       FROM form_answers a
+       JOIN form_fields f ON f.id = a.field_id AND f.form_template_id = ?
+      WHERE a.submission_id = ?
+      ORDER BY f.position, f.id`,
+    [templateId, latest.id],
+  );
+  const answers: Answer[] = [];
+  for (const row of rows) {
+    const value = row.answer_value?.trim();
+    if (!value) continue;
+    const result = checkValue(toField(row), value);
+    if ("value" in result) answers.push({ fieldId: row.id, value: result.value });
+  }
+  return { submittedAt: answers.length > 0 ? latest.submitted_at : null, answers };
+}
+
+// Sends the error response itself and returns undefined when the request cannot be served.
+async function previousDataFor(req: Request, res: Response) {
+  const { templateId, errors } = parsePreviousDataQuery(req.query);
+  if (!templateId || Object.keys(errors).length > 0) {
+    res.status(400).json({ error: "Validation failed", fields: errors });
+    return undefined;
+  }
+  const previous = await findPreviousAnswers(req.user!.id, templateId);
+  // Same 404 for missing and unpublished forms, like everywhere else.
+  if (!previous) res.status(404).json({ error: "Not found" });
+  return previous ?? undefined;
+}
+
+// Tells the form whether to offer prefill, without returning any values before consent.
+submissionsRouter.get("/previous-data/available", async (req, res) => {
+  const previous = await previousDataFor(req, res);
+  if (!previous) return;
+  res.json({ available: previous.answers.length > 0, fieldCount: previous.answers.length });
+});
+
+// The values themselves. The UI calls this only after the user has chosen to use them.
+submissionsRouter.get("/previous-data", async (req, res) => {
+  const previous = await previousDataFor(req, res);
+  if (previous) res.json({ previousData: previous });
 });
 
 // Owner only. Other users get 404 so submission ids cannot be probed.
