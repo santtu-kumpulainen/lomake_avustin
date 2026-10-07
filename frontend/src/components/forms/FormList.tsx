@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { listTemplates, type TemplateSummary } from "@/lib/forms";
 import { listDrafts, type DraftSummary } from "@/lib/submissions";
-import { ErrorMessage } from "@/components/admin/parts";
-import { sectionHeading } from "@/components/admin/styles";
+import { Badge, Chevron, EmptyState, ErrorMessage, Loading } from "@/components/ui/parts";
+import { secondaryButton, sectionHeading, textLink } from "@/components/ui/styles";
 
 export function FormList() {
   // undefined = still loading.
@@ -29,44 +29,46 @@ export function FormList() {
 
   if (status === 401) {
     return (
-      <p className="text-sm">
+      <p>
         Kirjaudu sisään nähdäksesi lomakkeet.{" "}
-        <Link href="/login" className="font-medium underline underline-offset-4">
+        <Link href="/login" className={textLink}>
           Kirjaudu sisään
         </Link>
       </p>
     );
   }
   if (error) return <ErrorMessage>{error}</ErrorMessage>;
-  if (!forms || !drafts) return <p className="text-sm text-neutral-500">Ladataan…</p>;
+  if (!forms || !drafts) return <Loading />;
 
   return (
-    <>
+    <div className="space-y-12">
       {drafts.length > 0 && (
-        <section className="mb-12">
-          <h2 className={sectionHeading}>Keskeneräiset luonnokset</h2>
-          <p className="mt-2 text-sm text-neutral-600">Luonnoksia ei ole lähetetty. Jatka täyttämistä ja lähetä, kun olet valmis.</p>
-          <ul className="mt-4 divide-y divide-neutral-200 border-y border-neutral-200">
+        <section aria-labelledby="drafts-heading">
+          <h2 id="drafts-heading" className={sectionHeading}>
+            Keskeneräiset luonnokset
+          </h2>
+          <p className="mt-1 text-ink-muted">Luonnoksia ei ole lähetetty. Jatka täyttämistä ja lähetä, kun olet valmis.</p>
+          <ul className="mt-4 divide-y divide-line overflow-hidden rounded-md border border-line bg-surface">
             {drafts.map((draft) => (
-              <li key={draft.id} className="flex flex-wrap items-start justify-between gap-3 py-4">
-                <div>
-                  <p className="font-medium">{draft.formName}</p>
-                  <p className="mt-1 text-sm text-neutral-600">
-                    Tallennettu {new Date(draft.updatedAt).toLocaleString("fi-FI")} ·{" "}
-                    {draft.answerCount} {draft.answerCount === 1 ? "vastaus" : "vastausta"}
+              <li key={draft.id} className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 px-5 py-4 sm:px-6">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <p className="font-semibold wrap-break-word">{draft.formName}</p>
+                    <Badge tone="draft">Luonnos</Badge>
+                  </div>
+                  <p className="mt-1 text-[0.9375rem] text-ink-muted">
+                    Tallennettu {new Date(draft.updatedAt).toLocaleString("fi-FI")}.{" "}
+                    {draft.answerCount} {draft.answerCount === 1 ? "vastaus" : "vastausta"}.
                   </p>
                   {!draft.formAvailable && (
-                    <p className="mt-1 text-sm text-neutral-600">
+                    <p className="mt-1 text-[0.9375rem] text-ink-muted">
                       Lomake ei ole tällä hetkellä käytettävissä. Luonnos säilyy, ja voit jatkaa, kun
                       lomake on taas saatavilla.
                     </p>
                   )}
                 </div>
                 {draft.formAvailable && (
-                  <Link
-                    href={`/forms/${draft.formTemplateId}?draft=${draft.id}`}
-                    className="text-sm font-medium underline underline-offset-4"
-                  >
+                  <Link href={`/forms/${draft.formTemplateId}?draft=${draft.id}`} className={secondaryButton}>
                     Jatka täyttämistä<span className="sr-only">: {draft.formName}</span>
                   </Link>
                 )}
@@ -76,31 +78,42 @@ export function FormList() {
         </section>
       )}
 
-      <section>
-        <h2 className={sectionHeading}>Täytettävät lomakkeet</h2>
-        {forms.length === 0 ? (
-          <p className="mt-4 text-sm text-neutral-600">Täytettäviä lomakkeita ei ole juuri nyt.</p>
-        ) : (
-          <ul className="mt-4 divide-y divide-neutral-200 border-y border-neutral-200">
-            {forms.map((form) => (
-              <li key={form.id}>
-                <Link
-                  href={`/forms/${form.id}`}
-                  className="group block py-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900"
-                >
-                  <span className="font-medium underline-offset-4 group-hover:underline">{form.name}</span>
-                  {form.description && (
-                    <span className="mt-1 block text-sm text-neutral-600">{form.description}</span>
-                  )}
-                  <span className="mt-1 block text-sm text-neutral-500">
-                    {form.fieldCount} {form.fieldCount === 1 ? "kysymys" : "kysymystä"}
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
+      <section aria-labelledby="forms-heading">
+        <h2 id="forms-heading" className={sectionHeading}>
+          Täytettävät lomakkeet
+        </h2>
+        <div className="mt-4">
+          {forms.length === 0 ? (
+            <EmptyState title="Täytettäviä lomakkeita ei ole juuri nyt.">
+              Lomakkeet tulevat näkyviin, kun ylläpitäjä julkaisee ne.
+            </EmptyState>
+          ) : (
+            <ul className="divide-y divide-line overflow-hidden rounded-md border border-line bg-surface">
+              {forms.map((form) => (
+                <li key={form.id}>
+                  <Link
+                    href={`/forms/${form.id}`}
+                    className="group flex items-center justify-between gap-4 px-5 py-5 hover:bg-canvas sm:px-6"
+                  >
+                    <span className="min-w-0">
+                      <span className="block text-lg font-semibold text-brand wrap-break-word group-hover:underline group-hover:underline-offset-4">
+                        {form.name}
+                      </span>
+                      {form.description && (
+                        <span className="mt-1 block text-ink-muted">{form.description}</span>
+                      )}
+                      <span className="mt-1 block text-[0.9375rem] text-ink-subtle">
+                        {form.fieldCount} {form.fieldCount === 1 ? "kysymys" : "kysymystä"}
+                      </span>
+                    </span>
+                    <Chevron />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </section>
-    </>
+    </div>
   );
 }

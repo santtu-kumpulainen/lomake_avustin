@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AdminOnly } from "@/components/admin/AdminOnly";
 import { TemplateEditor } from "@/components/admin/TemplateEditor";
+import { BackLink, Page } from "@/components/ui/parts";
 
 export const metadata: Metadata = { title: "Muokkaa lomakepohjaa | Lomakeavustin" };
 
@@ -12,13 +12,13 @@ export default async function FormTemplatePage({ params }: PageProps<"/admin/for
   if (!Number.isInteger(templateId) || templateId < 1) notFound();
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-6 py-16">
-      <Link href="/admin/forms" className="text-sm text-neutral-500 hover:text-neutral-900">
-        Lomakepohjat
-      </Link>
+    <Page width="wide">
+      <div className="mb-4">
+        <BackLink href="/admin/forms">Lomakepohjat</BackLink>
+      </div>
       <AdminOnly>
         <TemplateEditor id={templateId} />
       </AdminOnly>
-    </main>
+    </Page>
   );
 }

@@ -20,9 +20,19 @@ import {
   submitForm,
   type Submission,
 } from "@/lib/submissions";
-import { ErrorMessage } from "@/components/admin/parts";
 import { QuestionHelp, useQuestionHelp } from "@/components/forms/QuestionHelp";
-import { borderFor, inputClass, primaryButton, secondaryButton } from "@/components/admin/styles";
+import { Badge, ErrorMessage, FieldError, Loading, Notice, PageHeader } from "@/components/ui/parts";
+import {
+  borderFor,
+  hintClass,
+  inputClass,
+  labelClass,
+  primaryButton,
+  secondaryButton,
+  sectionHeading,
+  selectClass,
+  textButton,
+} from "@/components/ui/styles";
 
 const fieldId = (field: FormField) => `field-${field.id}`;
 
@@ -114,27 +124,51 @@ export function FormFiller({ id, draftId }: { id: number; draftId?: number }) {
     element?.scrollIntoView({ block: "center" });
   }, [step]);
 
-  if (loadError) return <ErrorMessage className="mt-8">{loadError}</ErrorMessage>;
-  if (!template) return <p className="mt-8 text-sm text-neutral-500">Ladataan…</p>;
+  if (loadError) return <ErrorMessage>{loadError}</ErrorMessage>;
+  if (!template) return <Loading />;
 
   if (submitted) {
     return (
-      <section className="mt-6">
-        <h1 ref={successRef} tabIndex={-1} className="text-3xl font-semibold tracking-tight outline-none">
-          Lomake lähetetty
-        </h1>
-        <p className="mt-2 text-neutral-600">{template.name}</p>
-        <div className="mt-8 border-l-2 border-emerald-700 pl-4">
-          <p className="text-sm text-neutral-600">Viitekoodi</p>
-          <p className="mt-1 font-mono text-3xl font-semibold tracking-wider">{submitted.referenceCode}</p>
-          <p className="mt-3 text-sm text-neutral-600">
-            Lähetetty {new Date(submitted.submittedAt).toLocaleString("fi-FI")}. Säilytä viitekoodi; sillä
-            lomakkeesi löytyy, jos otat yhteyttä.
-          </p>
+      <section aria-labelledby="success-heading" className="overflow-hidden rounded-md border border-line bg-surface">
+        <div className="flex items-start gap-4 border-b border-brand/20 bg-brand-tint px-5 py-6 sm:px-8">
+          <svg aria-hidden="true" width="32" height="32" viewBox="0 0 32 32" className="mt-0.5 shrink-0">
+            <circle cx="16" cy="16" r="16" fill="#1d5245" />
+            <path d="m10 16.5 4 4 8-9" fill="none" stroke="#fff" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <div className="min-w-0">
+            <h1
+              id="success-heading"
+              ref={successRef}
+              tabIndex={-1}
+              className="text-[1.75rem] leading-tight font-bold tracking-tight outline-none sm:text-[2rem]"
+            >
+              Lomake lähetetty
+            </h1>
+            <p className="mt-1 text-ink-muted wrap-break-word">{template.name}</p>
+          </div>
         </div>
-        <Link href="/forms" className="mt-10 inline-block text-sm font-medium underline underline-offset-4">
-          Takaisin lomakkeisiin
-        </Link>
+        <dl className="grid gap-x-8 gap-y-5 px-5 py-6 sm:grid-cols-[auto_1fr] sm:px-8">
+          <dt className="font-semibold sm:pt-0.5">Tila</dt>
+          <dd>
+            <Badge tone="brand">Lähetetty</Badge>
+          </dd>
+          <dt className="font-semibold sm:pt-2">Viitekoodi</dt>
+          <dd>
+            <p className="font-mono text-[2rem] leading-none font-bold tracking-[0.03em] text-ink sm:text-[2.5rem]">
+              {submitted.referenceCode}
+            </p>
+            <p className="mt-2 max-w-[34rem] text-[0.9375rem] text-ink-muted">
+              Säilytä viitekoodi. Sillä lomakkeesi löytyy, jos otat yhteyttä.
+            </p>
+          </dd>
+          <dt className="font-semibold">Lähetetty</dt>
+          <dd>{new Date(submitted.submittedAt).toLocaleString("fi-FI")}</dd>
+        </dl>
+        <div className="border-t border-line px-5 py-5 sm:px-8">
+          <Link href="/forms" className={secondaryButton}>
+            Takaisin lomakkeisiin
+          </Link>
+        </div>
       </section>
     );
   }
@@ -144,8 +178,8 @@ export function FormFiller({ id, draftId }: { id: number; draftId?: number }) {
   if (template.status !== "PUBLISHED") {
     return (
       <>
-        <h1 className="mt-6 text-3xl font-semibold tracking-tight">{template.name}</h1>
-        <p className="mt-4 text-sm">Lomaketta ei ole julkaistu, joten sitä ei voi täyttää.</p>
+        <PageHeader title={template.name} />
+        <Notice>Lomaketta ei ole julkaistu, joten sitä ei voi täyttää.</Notice>
       </>
     );
   }
@@ -284,57 +318,70 @@ export function FormFiller({ id, draftId }: { id: number; draftId?: number }) {
 
   const errorFields = fields.filter((field) => errors[field.id]);
   const hasErrors = errorFields.length > 0 || Boolean(formError);
+  const answeredCount = fields.filter((field) => (values[field.id] ?? "").trim()).length;
+  const requiredCount = fields.filter((field) => field.required).length;
 
   const header = (
-    <>
-      <h1 className="mt-6 text-3xl font-semibold tracking-tight">{template.name}</h1>
-      {draft && (
-        <p className="mt-3 flex items-center gap-3 text-sm text-neutral-600">
-          <span className="border border-neutral-400 px-2 py-0.5 text-xs font-medium text-neutral-700">
-            Luonnos
-          </span>
-          Tallennettu {new Date(draft.updatedAt).toLocaleString("fi-FI")}. Ei vielä lähetetty.
-        </p>
-      )}
-    </>
+    <PageHeader
+      title={template.name}
+      meta={
+        draft && (
+          <>
+            <Badge tone="draft">Luonnos</Badge>
+            <span className="text-[0.9375rem] text-ink-muted">
+              Tallennettu {new Date(draft.updatedAt).toLocaleString("fi-FI")}. Ei vielä lähetetty.
+            </span>
+          </>
+        )
+      }
+      lead={template.description && <p className="whitespace-pre-line">{template.description}</p>}
+    />
   );
 
   if (step === "review") {
     return (
       <>
         {header}
-        <section aria-labelledby="review-heading" className="mt-8">
-          <h2 ref={reviewRef} id="review-heading" tabIndex={-1} className="text-xl font-semibold outline-none">
+        <section aria-labelledby="review-heading">
+          <h2 ref={reviewRef} id="review-heading" tabIndex={-1} className={`${sectionHeading} outline-none`}>
             Tarkista vastauksesi
           </h2>
-          <p className="mt-2 text-sm text-neutral-600">
+          <p className="mt-1 text-ink-muted">
             Lomaketta ei ole vielä lähetetty. Tarkista vastaukset ja korjaa tarvittaessa ennen lähettämistä.
           </p>
-          <dl className="mt-6 divide-y divide-neutral-200 border-y border-neutral-200">
-            {fields.map((field) => (
-              <div key={field.id} className="flex items-start justify-between gap-4 py-4">
-                <div className="min-w-0">
-                  <dt className="text-sm text-neutral-600">{field.label}</dt>
-                  <dd className="mt-1 whitespace-pre-line wrap-anywhere">
-                    {formatAnswer(field, values[field.id]) ?? (
-                      <span className="text-neutral-500 italic">Ei annettu</span>
-                    )}
+
+          <dl className={`mt-5 -mx-4 divide-y divide-line border-y border-line bg-surface sm:mx-0 sm:rounded-md sm:border-x`}>
+            {fields.map((field, index) => {
+              const answer = formatAnswer(field, values[field.id]);
+              return (
+                <div key={field.id} className="grid grid-cols-[1fr_auto] gap-x-4 px-4 py-4 sm:px-6">
+                  <dt className="flex gap-2 text-[0.9375rem] text-ink-muted">
+                    <span aria-hidden="true" className="w-5 shrink-0 tabular-nums">
+                      {index + 1}.
+                    </span>
+                    <span className="min-w-0">{field.label}</span>
+                  </dt>
+                  <dd className="col-start-1 mt-1 pl-7 text-lg whitespace-pre-line wrap-anywhere">
+                    {answer ?? <span className="text-base text-ink-subtle italic">Ei annettu</span>}
+                  </dd>
+                  <dd className="col-start-2 row-span-2 row-start-1 -mt-1.5">
+                    <button
+                      type="button"
+                      onClick={() => handleEdit(field)}
+                      aria-label={`Muokkaa: ${field.label}`}
+                      className={textButton}
+                    >
+                      Muokkaa
+                    </button>
                   </dd>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleEdit(field)}
-                  aria-label={`Muokkaa: ${field.label}`}
-                  className="shrink-0 text-sm font-medium underline underline-offset-4"
-                >
-                  Muokkaa
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </dl>
 
-          <div className="mt-8">
-            <div className="flex items-start gap-3">
+          <div className="mt-8 rounded-md border border-line-strong/60 bg-surface px-4 py-5 sm:px-6">
+            <h3 className="font-bold">Vahvista ja lähetä</h3>
+            <div className="mt-3 flex items-start gap-3">
               <input
                 id="confirm-submit"
                 type="checkbox"
@@ -345,36 +392,32 @@ export function FormFiller({ id, draftId }: { id: number; draftId?: number }) {
                 }}
                 aria-invalid={confirmError ? true : undefined}
                 aria-describedby={confirmError ? "confirm-submit-error" : undefined}
-                className="mt-0.5 size-4 shrink-0 accent-neutral-900"
+                className="mt-0.5 size-5 shrink-0 accent-brand"
               />
-              <label htmlFor="confirm-submit" className="text-sm">
-                Olen tarkistanut vastaukseni ja haluan lähettää lomakkeen. Lähetettyä lomaketta ei voi
-                enää muokata.
+              <label htmlFor="confirm-submit">
+                Olen tarkistanut vastaukseni ja haluan lähettää lomakkeen. Lähetettyä lomaketta ei voi enää
+                muokata.
               </label>
             </div>
-            {confirmError && (
-              <p id="confirm-submit-error" className="mt-1.5 text-sm text-red-800">
-                {confirmError}
-              </p>
-            )}
-          </div>
-          <div className="mt-6 flex flex-wrap gap-3">
-            <button
-              type="button"
-              onClick={handleConfirmSubmit}
-              disabled={Boolean(pending)}
-              className={primaryButton}
-            >
-              {pending === "submit" ? "Lähetetään…" : "Lähetä lomake"}
-            </button>
-            <button
-              type="button"
-              onClick={() => handleEdit()}
-              disabled={Boolean(pending)}
-              className={secondaryButton}
-            >
-              Muokkaa vastauksia
-            </button>
+            {confirmError && <FieldError id="confirm-submit-error">{confirmError}</FieldError>}
+            <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+              <button
+                type="button"
+                onClick={handleConfirmSubmit}
+                disabled={Boolean(pending)}
+                className={`w-full sm:w-auto ${primaryButton}`}
+              >
+                {pending === "submit" ? "Lähetetään…" : "Lähetä lomake"}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleEdit()}
+                disabled={Boolean(pending)}
+                className={`w-full sm:w-auto ${secondaryButton}`}
+              >
+                Muokkaa vastauksia
+              </button>
+            </div>
           </div>
         </section>
       </>
@@ -384,12 +427,6 @@ export function FormFiller({ id, draftId }: { id: number; draftId?: number }) {
   return (
     <>
       {header}
-      {template.description && (
-        <p className="mt-2 whitespace-pre-line text-neutral-600">{template.description}</p>
-      )}
-      <p className="mt-6 text-sm text-neutral-600">
-        Tähdellä (<span className="text-red-800">*</span>) merkityt kentät ovat pakollisia.
-      </p>
 
       {prefill && (
         <PrefillNotice
@@ -402,16 +439,16 @@ export function FormFiller({ id, draftId }: { id: number; draftId?: number }) {
       {/* Always rendered so focus can move here; content appears only when there are errors. */}
       <div ref={summaryRef} tabIndex={-1} className="outline-none" aria-live="assertive">
         {hasErrors && (
-          <div className="mt-6 border-l-2 border-red-700 pl-4 text-sm text-red-800">
+          <div className="mb-6 rounded-md border border-danger/40 bg-danger-tint px-4 py-4 text-danger sm:px-5">
             {errorFields.length > 0 && (
               <>
-                <p className="font-medium">
+                <p className="font-bold">
                   Tarkista {errorFields.length === 1 ? "yksi kohta" : `${errorFields.length} kohtaa`}:
                 </p>
                 <ul className="mt-2 list-disc space-y-1 pl-5">
                   {errorFields.map((field) => (
                     <li key={field.id}>
-                      <a href={`#${fieldId(field)}`} className="underline underline-offset-4">
+                      <a href={`#${fieldId(field)}`} className="font-semibold underline underline-offset-4">
                         {field.label}
                       </a>
                     </li>
@@ -419,39 +456,59 @@ export function FormFiller({ id, draftId }: { id: number; draftId?: number }) {
                 </ul>
               </>
             )}
-            {formError && <p className={errorFields.length > 0 ? "mt-2" : ""}>{formError}</p>}
+            {formError && <p className={`font-semibold ${errorFields.length > 0 ? "mt-2" : ""}`}>{formError}</p>}
           </div>
         )}
       </div>
 
       {/* noValidate: errors are shown in one consistent style from the same rules as the backend. */}
-      <form onSubmit={handleReview} noValidate className="mt-8 space-y-6">
-        {fields.map((field) => (
-          <AnswerField
-            key={field.id}
-            field={field}
-            value={values[field.id] ?? ""}
-            error={errors[field.id]}
-            prefilled={prefilledIds.has(field.id)}
-            onChange={(value) => setValue(field, value)}
-          />
-        ))}
-        <div className="flex flex-wrap gap-3">
-          <button type="submit" disabled={Boolean(pending)} className={primaryButton}>
-            Jatka yhteenvetoon
-          </button>
-          <button
-            type="button"
-            onClick={handleSaveDraft}
-            disabled={Boolean(pending)}
-            className={secondaryButton}
-          >
-            {pending === "draft" ? "Tallennetaan…" : "Tallenna luonnos"}
-          </button>
-        </div>
-        <p role="status" className="text-sm text-neutral-700">
-          {draftNotice}
+      <form
+        onSubmit={handleReview}
+        noValidate
+        className="-mx-4 border-y border-line bg-surface sm:mx-0 sm:rounded-md sm:border-x"
+      >
+        <p className="border-b border-line px-4 py-3 text-[0.9375rem] text-ink-muted sm:px-8">
+          {fields.length} {fields.length === 1 ? "kysymys" : "kysymystä"}
+          {requiredCount > 0 && (
+            <>
+              . Tähdellä (<span className="font-bold text-danger">*</span>) merkityt kentät ovat pakollisia.
+            </>
+          )}
         </p>
+        <ol className="px-4 py-2 sm:px-8">
+          {fields.map((field, index) => (
+            <AnswerField
+              key={field.id}
+              field={field}
+              number={index + 1}
+              value={values[field.id] ?? ""}
+              error={errors[field.id]}
+              prefilled={prefilledIds.has(field.id)}
+              onChange={(value) => setValue(field, value)}
+            />
+          ))}
+        </ol>
+        <div className="border-t border-line px-4 py-5 sm:px-8">
+          <p className="text-[0.9375rem] text-ink-muted">
+            Vastattu {answeredCount}/{fields.length} kysymykseen. Tarkistat vastaukset ennen lähettämistä.
+          </p>
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+            <button type="submit" disabled={Boolean(pending)} className={`w-full sm:w-auto ${primaryButton}`}>
+              Jatka yhteenvetoon
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveDraft}
+              disabled={Boolean(pending)}
+              className={`w-full sm:w-auto ${secondaryButton}`}
+            >
+              {pending === "draft" ? "Tallennetaan…" : "Tallenna luonnos"}
+            </button>
+          </div>
+          <p role="status" className="text-[0.9375rem] text-ink-muted empty:hidden mt-3">
+            {draftNotice}
+          </p>
+        </div>
       </form>
     </>
   );
@@ -481,26 +538,26 @@ function PrefillNotice({ state, onAccept, onDecline }: PrefillNoticeProps) {
     const count = state.fieldCount;
     const busy = state.step === "loading";
     return (
-      <section aria-labelledby="prefill-heading" className="mt-6 border-l-2 border-neutral-900 pl-4">
-        <h2 id="prefill-heading" className="font-medium">
+      <Notice aria-labelledby="prefill-heading" className="mb-6">
+        <h2 id="prefill-heading" className="font-bold">
           Voit käyttää aiempia tietojasi lomakkeen esitäyttöön.
         </h2>
-        <p className="mt-2 text-sm text-neutral-600">
+        <p className="mt-1 max-w-[40rem] text-ink-muted">
           Tiedot tulevat vain omasta aiemmin lähettämästäsi samasta lomakkeesta
           {count ? ` (${count === 1 ? "1 vastaus" : `${count} vastausta`})` : ""}. Voit muokata tai
           poistaa jokaisen esitäytetyn arvon ennen lähettämistä. Aiempi lähetyksesi ei muutu. Jos
           täytät tyhjänä, aiempia tietoja ei käytetä ja lomake alkaa tyhjänä.
         </p>
         {/* Equal styling on purpose: neither choice is nudged. */}
-        <div className="mt-4 flex flex-wrap gap-3">
-          <button type="button" onClick={onAccept} disabled={busy} className={secondaryButton}>
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+          <button type="button" onClick={onAccept} disabled={busy} className={`w-full sm:w-auto ${secondaryButton}`}>
             {busy ? "Haetaan…" : "Käytä aiempia tietojani"}
           </button>
-          <button type="button" onClick={onDecline} disabled={busy} className={secondaryButton}>
+          <button type="button" onClick={onDecline} disabled={busy} className={`w-full sm:w-auto ${secondaryButton}`}>
             Täytä tyhjänä
           </button>
         </div>
-      </section>
+      </Notice>
     );
   }
 
@@ -522,7 +579,12 @@ function PrefillNotice({ state, onAccept, onDecline }: PrefillNoticeProps) {
     }
   }
   return (
-    <p role="status" className="mt-6 text-sm text-neutral-700">
+    <p
+      role="status"
+      className={`mb-6 rounded-md border px-4 py-3 sm:px-5 ${
+        state.step === "accepted" ? "border-brand/30 bg-brand-tint" : "border-line bg-surface"
+      }`}
+    >
       {message}
     </p>
   );
@@ -530,19 +592,22 @@ function PrefillNotice({ state, onAccept, onDecline }: PrefillNoticeProps) {
 
 type AnswerFieldProps = {
   field: FormField;
+  number: number;
   value: string;
   error?: string;
   prefilled: boolean;
   onChange: (value: string) => void;
 };
 
-function AnswerField({ field, value, error, prefilled, onChange }: AnswerFieldProps) {
+// One question on the form's numbered spine. The node fills in once the question has an answer.
+function AnswerField({ field, number, value, error, prefilled, onChange }: AnswerFieldProps) {
   const id = fieldId(field);
   const hintId = field.description ? `${id}-hint` : undefined;
   const prefilledId = prefilled ? `${id}-prefilled` : undefined;
   const errorId = error ? `${id}-error` : undefined;
   const help = useQuestionHelp(field);
   const helpId = `${id}-ai`;
+  const answered = value.trim() !== "";
   const common = {
     id,
     name: id,
@@ -566,7 +631,7 @@ function AnswerField({ field, value, error, prefilled, onChange }: AnswerFieldPr
       break;
     case "SELECT":
       input = (
-        <select {...common} onChange={(e) => onChange(e.target.value)}>
+        <select {...common} className={`${selectClass} ${borderFor(error)}`} onChange={(e) => onChange(e.target.value)}>
           <option value="">Valitse…</option>
           {field.options?.map((option) => (
             <option key={option} value={option}>
@@ -580,33 +645,51 @@ function AnswerField({ field, value, error, prefilled, onChange }: AnswerFieldPr
       input = <input type="text" {...common} onChange={(e) => onChange(e.target.value)} />;
   }
 
+  const node = error
+    ? "border-danger bg-danger-tint text-danger"
+    : answered
+      ? "border-brand bg-brand text-white"
+      : "border-line-strong bg-surface text-ink-muted";
+
   return (
-    <div>
-      <label htmlFor={id} className="block text-sm font-medium">
-        {field.label}
-        {field.required && (
-          <span className="ml-1 text-red-800" aria-hidden="true">
-            *
-          </span>
+    <li className="group/q relative grid grid-cols-[2rem_minmax(0,1fr)] gap-x-3 py-6 sm:gap-x-5">
+      {/* The spine: joins the question nodes, starting and ending at the first and last node. */}
+      <span
+        aria-hidden="true"
+        className="absolute top-0 bottom-0 left-4 w-px bg-line group-first/q:top-10 group-last/q:bottom-auto group-last/q:h-10 group-only/q:hidden"
+      />
+      <span
+        aria-hidden="true"
+        className={`relative flex size-8 items-center justify-center rounded-full border-[1.5px] text-sm font-bold tabular-nums transition-colors ${node}`}
+      >
+        {number}
+      </span>
+      <div className="pt-1">
+        <label htmlFor={id} className={`${labelClass} text-[1.0625rem]`}>
+          {field.label}
+          {field.required && (
+            <span className="ml-1 text-danger" aria-hidden="true">
+              *
+            </span>
+          )}
+        </label>
+        {field.description && (
+          <p id={hintId} className={hintClass}>
+            {field.description}
+          </p>
         )}
-      </label>
-      {field.description && (
-        <p id={hintId} className="mt-1 text-sm text-neutral-500">
-          {field.description}
-        </p>
-      )}
-      <QuestionHelp help={help} panelId={helpId} label={field.label} />
-      {input}
-      {prefilled && (
-        <p id={prefilledId} className="mt-1.5 text-xs text-neutral-500">
-          Esitäytetty aiemmista tiedoista
-        </p>
-      )}
-      {error && (
-        <p id={errorId} className="mt-1.5 text-sm text-red-800">
-          {error}
-        </p>
-      )}
-    </div>
+        <QuestionHelp help={help} panelId={helpId} label={field.label} />
+        {input}
+        {prefilled && (
+          <p id={prefilledId} className="mt-2 inline-flex items-center gap-1.5 rounded-sm bg-brand-tint px-2 py-0.5 text-sm font-semibold text-brand">
+            <svg aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M13 4 6.5 11 3 7.5" />
+            </svg>
+            Esitäytetty aiemmista tiedoista
+          </p>
+        )}
+        {error && <FieldError id={errorId}>{error}</FieldError>}
+      </div>
+    </li>
   );
 }
