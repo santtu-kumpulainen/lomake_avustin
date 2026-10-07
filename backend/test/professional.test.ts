@@ -139,9 +139,12 @@ describe("authorization", () => {
     }
   });
 
-  test("no route returns a single customer under /api/professional", async () => {
+  // Customer routes exist since Issue #32, but only for explicitly assigned customers.
+  test("no route returns a customer without an assignment", async () => {
+    const list = await request("GET", "/api/professional/customers", accounts.PROFESSIONAL.cookie);
+    assert.equal(list.status, 200);
+    assert.deepEqual((await list.json()).customers, []);
     for (const path of [
-      `/api/professional/customers`,
       `/api/professional/customers/${accounts.USER.id}`,
       `/api/professional/users/${accounts.USER.id}`,
       `/api/professional/submissions`,

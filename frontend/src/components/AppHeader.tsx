@@ -29,8 +29,7 @@ export function AppHeader() {
     router.replace("/login");
   }
 
-  // Professionals do not fill forms for customers, so they get only their dashboard until
-  // controlled access to customers exists.
+  // Professionals do not fill forms for customers; their assigned customers are on the dashboard.
   const links = user
     ? [
         user.role === "PROFESSIONAL"
@@ -42,7 +41,12 @@ export function AppHeader() {
               { href: "/profile", label: "Omat tiedot" },
             ]
           : []),
-        ...(user.role === "ADMIN" ? [{ href: "/admin/forms", label: "Lomakepohjat" }] : []),
+        ...(user.role === "ADMIN"
+          ? [
+              { href: "/admin/forms", label: "Lomakepohjat" },
+              { href: "/admin/professional-customers", label: "Asiakkuudet" },
+            ]
+          : []),
       ]
     : [];
   const isAuthPage = pathname === "/login" || pathname === "/register";

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { AssignedCustomers } from "./AssignedCustomers";
 import { getProfessionalDashboard, type ProfessionalDashboard as Dashboard } from "@/lib/professional";
 import { Badge, EmptyState, ErrorMessage, Loading, Notice } from "@/components/ui/parts";
 import { panel, sectionHeading, textLink } from "@/components/ui/styles";
@@ -48,6 +49,18 @@ export function ProfessionalDashboard() {
 
   return (
     <div className="space-y-10">
+      <section aria-labelledby="customers-heading">
+        <h2 id="customers-heading" className={sectionHeading}>
+          Omat asiakkaat
+        </h2>
+        <p className="mt-1 max-w-[40rem] text-ink-muted">
+          Näet vain asiakkaat, joihin ylläpitäjä on antanut sinulle pääsyn. Tiedot ovat vain luettavissa.
+        </p>
+        <div className="mt-4">
+          <AssignedCustomers />
+        </div>
+      </section>
+
       <section aria-labelledby="summary-heading">
         <h2 id="summary-heading" className={sectionHeading}>
           Lähetetyt lomakkeet
@@ -121,16 +134,6 @@ export function ProfessionalDashboard() {
             </table>
           )}
         </div>
-      </section>
-
-      <section aria-labelledby="customers-heading" className="border-t border-line pt-6">
-        <h2 id="customers-heading" className="font-semibold">
-          Asiakaskohtaiset tiedot
-        </h2>
-        <p className="mt-1 max-w-[40rem] text-ink-muted">
-          Yksittäisten asiakkaiden lähetykset, perustiedot ja asioinnin syyt eivät näy tällä työpöydällä. Ne tulevat
-          käyttöön, kun ammattilaisen ja asiakkaan välinen käyttöoikeus on määritelty.
-        </p>
       </section>
     </div>
   );

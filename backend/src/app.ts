@@ -1,4 +1,5 @@
 import express, { type ErrorRequestHandler } from "express";
+import { adminRouter } from "./routes/admin.js";
 import { aiRouter } from "./routes/ai.js";
 import { authRouter } from "./routes/auth.js";
 import { formsRouter } from "./routes/forms.js";
@@ -21,6 +22,7 @@ app.use("/api/ai", aiRouter);
 app.use("/api/profile", profileRouter);
 app.use("/api/symptom-descriptions", symptomDescriptionsRouter);
 app.use("/api/professional", professionalRouter);
+app.use("/api/admin", adminRouter);
 
 app.use((_req, res) => {
   res.status(404).json({ error: "Not found" });

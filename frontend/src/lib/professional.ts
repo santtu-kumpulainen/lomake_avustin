@@ -1,4 +1,5 @@
 import { apiRequest } from "./forms";
+import type { Submission, SubmittedSummary } from "./submissions";
 
 export type ProfessionalDashboard = {
   // Customers' submitted forms only; drafts and staff accounts are not counted.
@@ -10,4 +11,58 @@ export type ProfessionalDashboard = {
 /** Aggregate counts for the professional dashboard. Contains no customer data. */
 export function getProfessionalDashboard() {
   return apiRequest<{ dashboard: ProfessionalDashboard }>("GET", "/api/professional/dashboard");
+}
+
+// Customer access (Issue #32). Every route below returns data only for customers explicitly
+// assigned to the signed-in professional; anything else is a 404.
+
+export type AssignedCustomer = {
+  id: number;
+  // Null until the customer has saved their profile.
+  firstName: string | null;
+  lastName: string | null;
+  dateOfBirth: string | null;
+};
+
+export type CustomerProfile = AssignedCustomer & { phone: string | null };
+
+export type CustomerDescription = { description: string; createdAt: string };
+
+/** Display name, or a neutral label with the customer number when no profile exists yet. */
+export function customerName(customer: Pick<AssignedCustomer, "id" | "firstName" | "lastName">) {
+  const name = [customer.firstName, customer.lastName].filter(Boolean).join(" ");
+  return name || `Asiakas ${customer.id} (ei nimeä)`;
+}
+
+/** YYYY-MM-DD as a Finnish date, parsed by hand so the day never shifts with the time zone. */
+export function formatDate(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  return match ? `${Number(match[3])}.${Number(match[2])}.${match[1]}` : value;
+}
+
+const base = "/api/professional/customers";
+
+export function listAssignedCustomers() {
+  return apiRequest<{ customers: AssignedCustomer[] }>("GET", base);
+}
+
+export function getCustomer(id: number) {
+  return apiRequest<{ customer: CustomerProfile }>("GET", `${base}/${id}`);
+}
+
+export function getCustomerDescriptions(id: number) {
+  return apiRequest<{ symptomDescriptions: CustomerDescription[] }>("GET", `${base}/${id}/symptom-descriptions`);
+}
+
+export function getCustomerSubmissions(id: number) {
+  return apiRequest<{ submissions: SubmittedSummary[] }>("GET", `${base}/${id}/submissions`);
+}
+
+export type CustomerSubmission = Pick<
+  Submission,
+  "id" | "formTemplateId" | "formName" | "referenceCode" | "answers"
+> & { status: "SUBMITTED"; submittedAt: string };
+
+export function getCustomerSubmission(customerId: number, submissionId: number) {
+  return apiRequest<{ submission: CustomerSubmission }>("GET", `${base}/${customerId}/submissions/${submissionId}`);
 }
