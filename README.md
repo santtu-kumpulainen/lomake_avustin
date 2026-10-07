@@ -71,7 +71,7 @@ Returns `200` with `{"status":"ok","database":"ok",...}` when the backend and da
 
 ## Database
 
-The schema lives in `database/init/` (`001_schema.sql`, `002_sessions.sql`, `003_user_profile_birth_date.sql`, `004_form_template_category.sql`, `005_symptom_descriptions.sql`, `006_professional_customer_access.sql`, `007_submission_field_snapshots.sql`) and is applied automatically the first time MariaDB starts with an empty volume.
+The schema lives in `database/init/` (`001_schema.sql`, `002_sessions.sql`, `003_user_profile_birth_date.sql`, `004_form_template_category.sql`, `005_symptom_descriptions.sql`, `006_professional_customer_access.sql`, `007_submission_field_snapshots.sql`, `008_professional_customer_access_metadata.sql`) and is applied automatically the first time MariaDB starts with an empty volume.
 
 | Table | Purpose |
 | --- | --- |
@@ -82,7 +82,7 @@ The schema lives in `database/init/` (`001_schema.sql`, `002_sessions.sql`, `003
 | `form_submissions` | A user's draft or submitted form with a reference code such as `LA-7F42K9` |
 | `form_answers` | One answer per field per submission, with a prefilled flag |
 | `symptom_descriptions` | A customer's own descriptions of why they seek help, newest first |
-| `professional_customer_access` | Explicit professional -> customer assignments made by an admin; the only source of a professional's access to a customer |
+| `professional_customer_access` | Explicit professional -> customer assignments made by an admin, with creator, optional purpose and optional expiry; the only source of a professional's access to a customer |
 | `submission_field_snapshots` | Questions of a submitted form as they were at submission time; submitted-form views read questions from here |
 | `customer_contacts` | Synthetic contact history for the professional view |
 | `sessions` | Login sessions (SHA-256 hash of the cookie token, expiry) |
@@ -97,7 +97,7 @@ To add a new init file to an existing volume without deleting data, run it once 
 docker compose exec -T mariadb sh -c 'mariadb -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE"' < database/init/002_sessions.sql
 ```
 
-Existing volumes created before the customer profile need `003_user_profile_birth_date.sql` applied the same way (it only adds a nullable column). Volumes created before the demo form library need `004_form_template_category.sql` (adds the nullable `category` and `seed_key` columns), volumes created before the symptom descriptions need `005_symptom_descriptions.sql` (adds one table), volumes created before professional customer access need `006_professional_customer_access.sql` (adds one table), and volumes created before submission snapshots need `007_submission_field_snapshots.sql` (adds one table and backfills existing submitted forms; safe to run again).
+Existing volumes created before the customer profile need `003_user_profile_birth_date.sql` applied the same way (it only adds a nullable column). Volumes created before the demo form library need `004_form_template_category.sql` (adds the nullable `category` and `seed_key` columns), volumes created before the symptom descriptions need `005_symptom_descriptions.sql` (adds one table), volumes created before professional customer access need `006_professional_customer_access.sql` (adds one table), volumes created before submission snapshots need `007_submission_field_snapshots.sql` (adds one table and backfills existing submitted forms; safe to run again), and volumes created before assignment metadata need `008_professional_customer_access_metadata.sql` (adds three nullable columns; existing assignments stay active with no recorded creator; run it once).
 
 ## Authentication
 
@@ -296,20 +296,21 @@ A professional sees an individual customer only when an admin has assigned that 
 
 | Endpoint | Role | Response |
 | --- | --- | --- |
-| `GET /api/admin/professional-customers` | ADMIN | `{ assignments: [{ id, createdAt, professional: { id, email }, customer: { id, email, firstName, lastName } }] }` |
+| `GET /api/admin/professional-customers` | ADMIN | `{ assignments: [{ id, createdAt, professional: { id, email }, customer: { id, email, firstName, lastName }, purpose, expiresAt, createdBy: { id, email } \| null, status: "ACTIVE" \| "EXPIRED" }] }` |
 | `GET /api/admin/professional-customers/options` | ADMIN | `{ professionals: [{ id, email }], customers: [{ id, email, firstName, lastName }] }`, only accounts with the right role |
-| `POST /api/admin/professional-customers` | ADMIN | `{ professionalId, customerId }` -> `201 { assignment }`; `400` missing/invalid/unexpected keys, `not_found`, `invalid_role`; `409` duplicate |
+| `POST /api/admin/professional-customers` | ADMIN | `{ professionalId, customerId, purpose?, expiresAt? }` -> `201 { assignment: { id, professionalId, customerId, purpose, expiresAt } }`; `400` missing/invalid/unexpected keys, `not_found`, `invalid_role`, `purpose`: `invalid`/`too_long`, `expiresAt`: `invalid`/`in_past`; `409` duplicate |
 | `DELETE /api/admin/professional-customers/:id` | ADMIN | `204`; `404` |
 | `GET /api/professional/customers` | PROFESSIONAL | `{ customers: [{ id, firstName, lastName, dateOfBirth }] }`, own assignments only |
-| `GET /api/professional/customers/:customerId` | PROFESSIONAL | `{ customer: { id, firstName, lastName, dateOfBirth, phone } }` (no email) |
+| `GET /api/professional/customers/:customerId` | PROFESSIONAL | `{ customer: { id, firstName, lastName, dateOfBirth, phone }, access: { purpose, expiresAt } }` (no email, no creator) |
 | `GET /api/professional/customers/:customerId/symptom-descriptions` | PROFESSIONAL | `{ symptomDescriptions: [{ description, createdAt }] }`, newest first |
 | `GET /api/professional/customers/:customerId/submissions` | PROFESSIONAL | `{ submissions }`, `SUBMITTED` only |
 | `GET /api/professional/customers/:customerId/timeline` | PROFESSIONAL | `{ timeline: [{ type: "SYMPTOM_DESCRIPTION", occurredAt, description } \| { type: "SUBMISSION", occurredAt, submissionId, formName, answerCount }] }`, newest first |
 | `GET /api/professional/customers/:customerId/submissions/:submissionId` | PROFESSIONAL | `{ submission: { id, formTemplateId, formName, status, referenceCode, submittedAt, answers } }` |
 
-- Every `:customerId` route passes one gate (`router.param`): the professional is the session user, the assignment must exist, and both roles are re-checked in the same query. An unassigned, unknown or malformed id, a draft and another customer's submission all get the same `404`.
+- Every `:customerId` route passes one gate (`router.param`): the professional is the session user, the assignment must exist and must not be expired (`expires_at` NULL or later than the database `NOW()`), and both roles are re-checked in the same query. An expired assignment is the same `404` as no assignment. An unassigned, unknown or malformed id, a draft and another customer's submission all get the same `404`.
 - Admin routes return `401`/`403` to others; professional routes return `401`, `403` USER/ADMIN, and `400` for any query parameter (`userId`, `professionalId`...).
-- Deleting either user deletes their assignments (`ON DELETE CASCADE`). Existing customer routes (`/api/profile`, `/api/symptom-descriptions`, `/api/submissions`) are unchanged and still owner-only.
+- Assignment metadata: the creator is always the admin of the session (a `createdBy` key is rejected); `purpose` is trimmed, at most 300 characters, single line, and should not contain health data; `expiresAt` is ISO 8601 with an explicit offset (e.g. `2026-12-31T16:00:00+02:00` or `...Z`) and must be in the future. Assignments are not edited: to change one, remove it and create a new one (also needed after expiry, since the pair stays unique). Assignments created before `008` have no recorded creator (`createdBy: null`).
+- Deleting either user deletes their assignments (`ON DELETE CASCADE`); deleting the creating admin keeps the assignment and clears its creator (`ON DELETE SET NULL`). Existing customer routes (`/api/profile`, `/api/symptom-descriptions`, `/api/submissions`) are unchanged and still owner-only.
 - The timeline is a read model over existing `symptom_descriptions` and submitted `form_submissions` (no event table, drafts excluded). It is ordered in SQL: time descending, then submissions before descriptions in the same second, then id descending.
 - No customer data is sent to Ollama by these routes.
 

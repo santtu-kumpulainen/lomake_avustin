@@ -50,8 +50,12 @@ export function listAssignedCustomers() {
   return apiRequest<{ customers: AssignedCustomer[] }>("GET", base);
 }
 
+// Why and until when the professional may see this customer (Issue #38). Expired assignments
+// never reach the browser: the backend answers 404 for them.
+export type CustomerAccess = { purpose: string | null; expiresAt: string | null };
+
 export function getCustomer(id: number) {
-  return apiRequest<{ customer: CustomerProfile }>("GET", `${base}/${id}`);
+  return apiRequest<{ customer: CustomerProfile; access: CustomerAccess }>("GET", `${base}/${id}`);
 }
 
 export function getCustomerTimeline(id: number) {
