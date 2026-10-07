@@ -19,6 +19,7 @@ type TemplateRow = {
   id: number;
   name: string;
   description: string | null;
+  category: string | null;
   status: TemplateStatus;
   created_at: Date;
   updated_at: Date;
@@ -34,7 +35,7 @@ export type FieldRow = {
   options: string[] | string | null;
 };
 
-const TEMPLATE_COLUMNS = "id, name, description, status, created_at, updated_at";
+const TEMPLATE_COLUMNS = "id, name, description, category, status, created_at, updated_at";
 export const FIELD_COLUMNS = "id, label, description, field_type, is_required, position, options";
 
 function toTemplate(row: TemplateRow) {
@@ -42,6 +43,7 @@ function toTemplate(row: TemplateRow) {
     id: row.id,
     name: row.name,
     description: row.description,
+    category: row.category,
     status: row.status,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -113,7 +115,7 @@ formsRouter.use(requireAuth);
 formsRouter.get("/", async (req, res) => {
   const isAdmin = req.user!.role === "ADMIN";
   const rows: (TemplateRow & { field_count: bigint })[] = await pool.query(
-    `SELECT t.id, t.name, t.description, t.status, t.created_at, t.updated_at,
+    `SELECT t.id, t.name, t.description, t.category, t.status, t.created_at, t.updated_at,
             (SELECT COUNT(*) FROM form_fields f WHERE f.form_template_id = t.id) AS field_count
        FROM form_templates t
       ${isAdmin ? "" : "WHERE t.status = 'PUBLISHED'"}
@@ -142,8 +144,8 @@ formsRouter.post("/", requireRole("ADMIN"), async (req, res) => {
     return;
   }
   const result = await pool.query(
-    "INSERT INTO form_templates (name, description, status) VALUES (?, ?, 'DRAFT')",
-    [value.name, value.description],
+    "INSERT INTO form_templates (name, description, category, status) VALUES (?, ?, ?, 'DRAFT')",
+    [value.name, value.description, value.category],
   );
   await sendTemplateWithFields(res, Number(result.insertId), 201);
 });
@@ -156,11 +158,10 @@ formsRouter.patch("/:id", requireRole("ADMIN"), async (req, res) => {
     validationError(res, errors);
     return;
   }
-  await pool.query("UPDATE form_templates SET name = ?, description = ? WHERE id = ?", [
-    value.name,
-    value.description,
-    template.id,
-  ]);
+  await pool.query(
+    "UPDATE form_templates SET name = ?, description = ?, category = ? WHERE id = ?",
+    [value.name, value.description, value.category, template.id],
+  );
   await sendTemplateWithFields(res, template.id);
 });
 

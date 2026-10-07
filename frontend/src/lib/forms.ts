@@ -15,6 +15,7 @@ export type FormTemplate = {
   id: number;
   name: string;
   description: string | null;
+  category: string | null;
   status: TemplateStatus;
   createdAt: string;
   updatedAt: string;
@@ -56,6 +57,9 @@ const fieldMessages: Record<string, Record<string, string>> = {
   },
   description: {
     too_long: "Kuvaus voi olla enintään 2000 merkkiä.",
+  },
+  category: {
+    too_long: "Aihe voi olla enintään 100 merkkiä.",
   },
   fieldType: {
     required: "Valitse kentän tyyppi.",
@@ -159,11 +163,13 @@ export function getTemplate(id: number) {
   return api<TemplateResponse>("GET", `/${id}`);
 }
 
-export function createTemplate(input: { name: string; description: string | null }) {
+type TemplateDetails = { name: string; description: string | null; category: string | null };
+
+export function createTemplate(input: TemplateDetails) {
   return api<TemplateResponse>("POST", "", input);
 }
 
-export function updateTemplate(id: number, input: { name: string; description: string | null }) {
+export function updateTemplate(id: number, input: TemplateDetails) {
   return api<TemplateResponse>("PATCH", `/${id}`, input, editConflict);
 }
 

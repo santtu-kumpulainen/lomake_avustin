@@ -6,12 +6,13 @@ export type FieldType = (typeof FIELD_TYPES)[number];
 export type FieldErrors = Record<string, string>;
 
 const NAME_MAX = 200;
+const CATEGORY_MAX = 100;
 const LABEL_MAX = 255;
 const DESCRIPTION_MAX = 2000;
 const OPTION_MAX = 200;
 const OPTIONS_MAX_COUNT = 50;
 
-export type TemplateInput = { name: string; description: string | null };
+export type TemplateInput = { name: string; description: string | null; category: string | null };
 
 export type FieldInput = {
   label: string;
@@ -39,14 +40,19 @@ function readRequiredText(value: unknown, max: number, errors: FieldErrors, key:
 }
 
 // Empty strings become NULL so "no description" has one representation.
-function readOptionalText(value: unknown, errors: FieldErrors, key: string): string | null {
+function readOptionalText(
+  value: unknown,
+  errors: FieldErrors,
+  key: string,
+  max = DESCRIPTION_MAX,
+): string | null {
   if (value === undefined || value === null) return null;
   if (typeof value !== "string") {
     errors[key] = "invalid";
     return null;
   }
   const text = value.trim();
-  if (text.length > DESCRIPTION_MAX) errors[key] = "too_long";
+  if (text.length > max) errors[key] = "too_long";
   return text || null;
 }
 
@@ -80,7 +86,11 @@ export function validateTemplate(
     current && data.description === undefined
       ? current.description
       : readOptionalText(data.description, errors, "description");
-  return { value: { name, description }, errors };
+  const category =
+    current && data.category === undefined
+      ? current.category
+      : readOptionalText(data.category, errors, "category", CATEGORY_MAX);
+  return { value: { name, description, category }, errors };
 }
 
 /** Validates a full field, or a partial one for PATCH merged over the current values. */
