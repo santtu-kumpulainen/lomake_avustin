@@ -21,6 +21,7 @@ import {
   type Submission,
 } from "@/lib/submissions";
 import { ErrorMessage } from "@/components/admin/parts";
+import { QuestionHelp, useQuestionHelp } from "@/components/forms/QuestionHelp";
 import { borderFor, inputClass, primaryButton, secondaryButton } from "@/components/admin/styles";
 
 const fieldId = (field: FormField) => `field-${field.id}`;
@@ -399,13 +400,15 @@ function AnswerField({ field, value, error, prefilled, onChange }: AnswerFieldPr
   const hintId = field.description ? `${id}-hint` : undefined;
   const prefilledId = prefilled ? `${id}-prefilled` : undefined;
   const errorId = error ? `${id}-error` : undefined;
+  const help = useQuestionHelp(field);
+  const helpId = `${id}-ai`;
   const common = {
     id,
     name: id,
     value,
     "aria-required": field.required || undefined,
     "aria-invalid": error ? true : undefined,
-    "aria-describedby": [hintId, prefilledId, errorId].filter(Boolean).join(" ") || undefined,
+    "aria-describedby": [hintId, help.state.step === "shown" ? helpId : undefined, prefilledId, errorId].filter(Boolean).join(" ") || undefined,
     className: `${inputClass} ${borderFor(error)}`,
   };
 
@@ -451,6 +454,7 @@ function AnswerField({ field, value, error, prefilled, onChange }: AnswerFieldPr
           {field.description}
         </p>
       )}
+      <QuestionHelp help={help} panelId={helpId} label={field.label} />
       {input}
       {prefilled && (
         <p id={prefilledId} className="mt-1.5 text-xs text-neutral-500">
