@@ -32,7 +32,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <AppHeader />
         {children}
         <footer className="border-t border-line">
-          <p className="mx-auto max-w-4xl px-4 py-6 text-sm text-ink-subtle sm:px-6">
+          <p className="mx-auto max-w-5xl px-4 py-6 text-sm text-ink-subtle sm:px-6">
             Lomakeavustin on MVP-demo. Käytä vain keksittyjä tietoja, älä oikeita henkilö- tai terveystietoja.
           </p>
         </footer>

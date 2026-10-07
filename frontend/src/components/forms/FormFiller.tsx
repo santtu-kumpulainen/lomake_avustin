@@ -20,6 +20,7 @@ import {
   submitForm,
   type Submission,
 } from "@/lib/submissions";
+import { AnswerList } from "@/components/forms/AnswerList";
 import { QuestionHelp, useQuestionHelp } from "@/components/forms/QuestionHelp";
 import { Badge, ErrorMessage, FieldError, Loading, Notice, PageHeader } from "@/components/ui/parts";
 import {
@@ -31,7 +32,6 @@ import {
   secondaryButton,
   sectionHeading,
   selectClass,
-  textButton,
 } from "@/components/ui/styles";
 
 const fieldId = (field: FormField) => `field-${field.id}`;
@@ -350,34 +350,17 @@ export function FormFiller({ id, draftId }: { id: number; draftId?: number }) {
             Lomaketta ei ole vielä lähetetty. Tarkista vastaukset ja korjaa tarvittaessa ennen lähettämistä.
           </p>
 
-          <dl className={`mt-5 -mx-4 divide-y divide-line border-y border-line bg-surface sm:mx-0 sm:rounded-md sm:border-x`}>
-            {fields.map((field, index) => {
-              const answer = formatAnswer(field, values[field.id]);
-              return (
-                <div key={field.id} className="grid grid-cols-[1fr_auto] gap-x-4 px-4 py-4 sm:px-6">
-                  <dt className="flex gap-2 text-[0.9375rem] text-ink-muted">
-                    <span aria-hidden="true" className="w-5 shrink-0 tabular-nums">
-                      {index + 1}.
-                    </span>
-                    <span className="min-w-0">{field.label}</span>
-                  </dt>
-                  <dd className="col-start-1 mt-1 pl-7 text-lg whitespace-pre-line wrap-anywhere">
-                    {answer ?? <span className="text-base text-ink-subtle italic">Ei annettu</span>}
-                  </dd>
-                  <dd className="col-start-2 row-span-2 row-start-1 -mt-1.5">
-                    <button
-                      type="button"
-                      onClick={() => handleEdit(field)}
-                      aria-label={`Muokkaa: ${field.label}`}
-                      className={textButton}
-                    >
-                      Muokkaa
-                    </button>
-                  </dd>
-                </div>
-              );
-            })}
-          </dl>
+          <div className="mt-5">
+            <AnswerList
+              items={fields.map((field) => ({
+                fieldId: field.id,
+                label: field.label,
+                fieldType: field.fieldType,
+                value: values[field.id],
+              }))}
+              onEdit={(fieldId) => handleEdit(fields.find((field) => field.id === fieldId))}
+            />
+          </div>
 
           <div className="mt-8 rounded-md border border-line-strong/60 bg-surface px-4 py-5 sm:px-6">
             <h3 className="font-bold">Vahvista ja lähetä</h3>
@@ -512,19 +495,6 @@ export function FormFiller({ id, draftId }: { id: number; draftId?: number }) {
       </form>
     </>
   );
-}
-
-/** Readable answer for the summary, or undefined when nothing was given. */
-function formatAnswer(field: FormField, value: string | undefined) {
-  const trimmed = (value ?? "").trim();
-  if (!trimmed) return undefined;
-  if (field.fieldType === "DATE") {
-    // Parsed by hand so the shown day never shifts with the time zone.
-    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
-    if (match) return `${Number(match[3])}.${Number(match[2])}.${match[1]}`;
-  }
-  // SELECT values are the option texts themselves, so they are already readable.
-  return trimmed;
 }
 
 type PrefillNoticeProps = {

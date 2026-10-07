@@ -1,4 +1,4 @@
-import { answerMessages, apiRequest, type FieldErrors, type FormField } from "./forms";
+import { answerMessages, apiRequest, type FieldErrors, type FieldType, type FormField } from "./forms";
 
 export type SubmittedForm = {
   id: number;
@@ -54,8 +54,48 @@ export type Submission = {
   createdAt: string;
   updatedAt: string;
   submittedAt: string | null;
-  answers: { fieldId: number; label: string; value: string | null }[];
+  // For a submitted form, questions left empty are included with a null value.
+  answers: { fieldId: number; label: string; fieldType: FieldType; value: string | null }[];
 };
+
+export type SubmittedSummary = {
+  id: number;
+  formTemplateId: number;
+  formName: string;
+  status: "SUBMITTED";
+  referenceCode: string;
+  submittedAt: string;
+};
+
+/** The user's own submitted forms, newest first. */
+export function listSubmissions() {
+  return apiRequest<{ submissions: SubmittedSummary[] }>("GET", "/api/submissions");
+}
+
+/** Submission time in Finnish format, e.g. "7.10.2026 klo 14.05". */
+export const formatDateTime = (iso: string) =>
+  new Date(iso).toLocaleString("fi-FI", {
+    day: "numeric",
+    month: "numeric",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+/** Readable answer for summaries and receipts, or undefined when nothing was given. */
+export function formatAnswer(fieldType: FieldType, value: string | null | undefined) {
+  const trimmed = (value ?? "").trim();
+  if (!trimmed) return undefined;
+  if (fieldType === "DATE") {
+    // Parsed by hand so the shown day never shifts with the time zone.
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+    if (match) return `${Number(match[3])}.${Number(match[2])}.${match[1]}`;
+  }
+  // Stored with a dot; shown with the Finnish decimal comma.
+  if (fieldType === "NUMBER") return trimmed.replace(".", ",");
+  // SELECT values are the option texts themselves, so they are already readable.
+  return trimmed;
+}
 
 const draftConflict =
   "Luonnosta ei voi enää muuttaa: se on jo lähetetty tai lomake ei ole tällä hetkellä käytettävissä.";
