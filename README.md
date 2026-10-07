@@ -291,7 +291,7 @@ Professionals (`PROFESSIONAL`) get their own menu and a dashboard, "Ammattilaise
 
 ## Professional customer access
 
-A professional sees an individual customer only when an admin has assigned that customer to them (`professional_customer_access`). The role alone grants nothing. Admins manage assignments in "Asiakkuudet" (`/admin/professional-customers`); professionals see their customers on the dashboard and open them at `/professional/customers/[id]` (profile, reasons for seeking help, submitted forms and answers). Everything is read-only.
+A professional sees an individual customer only when an admin has assigned that customer to them (`professional_customer_access`). The role alone grants nothing. Admins manage assignments in "Asiakkuudet" (`/admin/professional-customers`); professionals see their customers on the dashboard and open them at `/professional/customers/[id]` (profile and a newest-first timeline of the customer's reasons for seeking help and submitted forms, each form opening its answers). Everything is read-only.
 
 | Endpoint | Role | Response |
 | --- | --- | --- |
@@ -303,11 +303,13 @@ A professional sees an individual customer only when an admin has assigned that 
 | `GET /api/professional/customers/:customerId` | PROFESSIONAL | `{ customer: { id, firstName, lastName, dateOfBirth, phone } }` (no email) |
 | `GET /api/professional/customers/:customerId/symptom-descriptions` | PROFESSIONAL | `{ symptomDescriptions: [{ description, createdAt }] }`, newest first |
 | `GET /api/professional/customers/:customerId/submissions` | PROFESSIONAL | `{ submissions }`, `SUBMITTED` only |
+| `GET /api/professional/customers/:customerId/timeline` | PROFESSIONAL | `{ timeline: [{ type: "SYMPTOM_DESCRIPTION", occurredAt, description } \| { type: "SUBMISSION", occurredAt, submissionId, formName, answerCount }] }`, newest first |
 | `GET /api/professional/customers/:customerId/submissions/:submissionId` | PROFESSIONAL | `{ submission: { id, formTemplateId, formName, status, referenceCode, submittedAt, answers } }` |
 
 - Every `:customerId` route passes one gate (`router.param`): the professional is the session user, the assignment must exist, and both roles are re-checked in the same query. An unassigned, unknown or malformed id, a draft and another customer's submission all get the same `404`.
 - Admin routes return `401`/`403` to others; professional routes return `401`, `403` USER/ADMIN, and `400` for any query parameter (`userId`, `professionalId`...).
 - Deleting either user deletes their assignments (`ON DELETE CASCADE`). Existing customer routes (`/api/profile`, `/api/symptom-descriptions`, `/api/submissions`) are unchanged and still owner-only.
+- The timeline is a read model over existing `symptom_descriptions` and submitted `form_submissions` (no event table, drafts excluded). It is ordered in SQL: time descending, then submissions before descriptions in the same second, then id descending.
 - No customer data is sent to Ollama by these routes.
 
 ## Running without Docker

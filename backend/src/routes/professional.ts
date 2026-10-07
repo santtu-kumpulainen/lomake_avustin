@@ -181,6 +181,50 @@ professionalRouter.get("/customers/:customerId/submissions", async (_req, res) =
   res.json({ submissions: await listSubmitted(res.locals.customerId) });
 });
 
+type TimelineRow = {
+  type: "SUBMISSION" | "SYMPTOM_DESCRIPTION";
+  occurred_at: Date;
+  id: number;
+  form_name: string | null;
+  answer_count: unknown;
+  description: string | null;
+};
+
+// A read model over existing data (Issue #34): descriptions and submitted forms of this customer.
+// Newest first by database time. Equal timestamps (DATETIME has second precision) sort submissions
+// first, then by row id, so the order never depends on the database's choice.
+professionalRouter.get("/customers/:customerId/timeline", async (_req, res) => {
+  const customerId: number = res.locals.customerId;
+  const rows: TimelineRow[] = await pool.query(
+    `SELECT 'SUBMISSION' AS type, s.submitted_at AS occurred_at, s.id, t.name AS form_name,
+            (SELECT COUNT(*) FROM form_answers a WHERE a.submission_id = s.id) AS answer_count,
+            NULL AS description, 0 AS type_order
+       FROM form_submissions s
+       JOIN form_templates t ON t.id = s.form_template_id
+      WHERE s.user_id = ? AND s.status = 'SUBMITTED'
+     UNION ALL
+     SELECT 'SYMPTOM_DESCRIPTION', d.created_at, d.id, NULL, NULL, d.description, 1
+       FROM symptom_descriptions d
+      WHERE d.user_id = ?
+     ORDER BY occurred_at DESC, type_order, id DESC`,
+    [customerId, customerId],
+  );
+  // Only the submission id is exposed, because the page links to it; description ids are not needed.
+  res.json({
+    timeline: rows.map((row) =>
+      row.type === "SUBMISSION"
+        ? {
+            type: row.type,
+            occurredAt: row.occurred_at,
+            submissionId: row.id,
+            formName: row.form_name,
+            answerCount: Number(row.answer_count),
+          }
+        : { type: row.type, occurredAt: row.occurred_at, description: row.description },
+    ),
+  });
+});
+
 // The submission must belong to this customer and be submitted; drafts are a 404 like any
 // other id the professional may not see.
 professionalRouter.get("/customers/:customerId/submissions/:submissionId", async (req, res) => {
