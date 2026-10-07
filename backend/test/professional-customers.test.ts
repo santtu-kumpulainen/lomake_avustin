@@ -8,6 +8,7 @@ import type { AddressInfo } from "node:net";
 import { after, before, describe, test } from "node:test";
 import { app } from "../src/app.js";
 import { pool } from "../src/db.js";
+import { snapshotFields } from "../src/routes/submissions.js";
 
 const PASSWORD = "testisalasana-123";
 const ADMIN_PATH = "/api/admin/professional-customers";
@@ -67,6 +68,8 @@ async function insertSubmission(userId: number, status: "DRAFT" | "SUBMITTED", a
     fieldIds[1],
     answer,
   ]);
+  // Like the submit routes, a submitted form gets its question snapshot.
+  if (status === "SUBMITTED") await snapshotFields(pool, id);
   return id;
 }
 

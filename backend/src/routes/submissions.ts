@@ -139,6 +139,24 @@ async function saveAnswers(
   }
 }
 
+/**
+ * Copies the form's current questions into the submission's snapshot (Issue #36). Call it in
+ * the transaction that submits the form, after the template is locked, so the copy is exactly
+ * the field set the answers were validated against. The rows are never updated afterwards.
+ */
+export async function snapshotFields(conn: PoolConnection | typeof pool, submissionId: number) {
+  await conn.query(
+    `INSERT INTO submission_field_snapshots
+       (submission_id, source_field_id, label, field_type, is_required, options, position)
+     SELECT s.id, f.id, f.label, f.field_type, f.is_required, f.options,
+            ROW_NUMBER() OVER (ORDER BY f.position, f.id)
+       FROM form_submissions s
+       JOIN form_fields f ON f.form_template_id = s.form_template_id
+      WHERE s.id = ?`,
+    [submissionId],
+  );
+}
+
 type SubmissionRow = {
   id: number;
   form_template_id: number;
@@ -152,8 +170,9 @@ type SubmissionRow = {
 };
 
 /**
- * The owner's submission. `withUnanswered` (detail view) also lists questions of a submitted
- * form that were left empty, since empty optional answers are not stored as rows.
+ * The owner's submission. A submitted form's questions come from its snapshot, so later template
+ * edits never change it; a draft follows the current form. `withUnanswered` (detail view) also
+ * lists questions of a submitted form that were left empty, since empty answers are not stored.
  */
 export async function loadSubmission(
   conn: PoolConnection | typeof pool,
@@ -173,15 +192,14 @@ export async function loadSubmission(
   if (!row) return undefined;
   type AnswerRow = { field_id: number; label: string; field_type: string; answer_value: string | null };
   const answers: AnswerRow[] =
-    withUnanswered && row.submitted_at
-      ? // Fields added to the template after the submission were never part of it, so they are left out.
+    row.status === "SUBMITTED"
+      ? // Matched by the original field id only; the current form_fields row is not needed.
         await conn.query(
-          `SELECT f.id AS field_id, f.label, f.field_type, a.answer_value
-             FROM form_submissions s
-             JOIN form_fields f ON f.form_template_id = s.form_template_id
-             LEFT JOIN form_answers a ON a.field_id = f.id AND a.submission_id = s.id
-            WHERE s.id = ? AND (a.id IS NOT NULL OR f.created_at <= s.submitted_at)
-            ORDER BY f.position, f.id`,
+          `SELECT q.source_field_id AS field_id, q.label, q.field_type, a.answer_value
+             FROM submission_field_snapshots q
+             LEFT JOIN form_answers a ON a.submission_id = q.submission_id AND a.field_id = q.source_field_id
+            WHERE q.submission_id = ?${withUnanswered ? "" : " AND a.id IS NOT NULL"}
+            ORDER BY q.position`,
           [row.id],
         )
       : await conn.query(
@@ -257,6 +275,7 @@ submissionsRouter.post("/", async (req, res) => {
 
     const id = await insertSubmission(conn, req.user!.id, templateId, "SUBMITTED");
     await saveAnswers(conn, id, answers);
+    await snapshotFields(conn, id);
     const saved = (await loadSubmission(conn, id, req.user!.id))!;
     return {
       status: 201,
@@ -496,6 +515,7 @@ submissionsRouter.post("/:id/submit", async (req, res) => {
     const { errors } = validateAnswers(all, fields);
     if (Object.keys(errors).length > 0) return validationFailed(errors);
 
+    await snapshotFields(conn, id);
     await conn.query(
       "UPDATE form_submissions SET status = 'SUBMITTED', submitted_at = CURRENT_TIMESTAMP WHERE id = ?",
       [id],

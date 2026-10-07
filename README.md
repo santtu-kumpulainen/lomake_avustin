@@ -71,7 +71,7 @@ Returns `200` with `{"status":"ok","database":"ok",...}` when the backend and da
 
 ## Database
 
-The schema lives in `database/init/` (`001_schema.sql`, `002_sessions.sql`, `003_user_profile_birth_date.sql`, `004_form_template_category.sql`, `005_symptom_descriptions.sql`, `006_professional_customer_access.sql`) and is applied automatically the first time MariaDB starts with an empty volume.
+The schema lives in `database/init/` (`001_schema.sql`, `002_sessions.sql`, `003_user_profile_birth_date.sql`, `004_form_template_category.sql`, `005_symptom_descriptions.sql`, `006_professional_customer_access.sql`, `007_submission_field_snapshots.sql`) and is applied automatically the first time MariaDB starts with an empty volume.
 
 | Table | Purpose |
 | --- | --- |
@@ -83,6 +83,7 @@ The schema lives in `database/init/` (`001_schema.sql`, `002_sessions.sql`, `003
 | `form_answers` | One answer per field per submission, with a prefilled flag |
 | `symptom_descriptions` | A customer's own descriptions of why they seek help, newest first |
 | `professional_customer_access` | Explicit professional -> customer assignments made by an admin; the only source of a professional's access to a customer |
+| `submission_field_snapshots` | Questions of a submitted form as they were at submission time; submitted-form views read questions from here |
 | `customer_contacts` | Synthetic contact history for the professional view |
 | `sessions` | Login sessions (SHA-256 hash of the cookie token, expiry) |
 
@@ -96,7 +97,7 @@ To add a new init file to an existing volume without deleting data, run it once 
 docker compose exec -T mariadb sh -c 'mariadb -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE"' < database/init/002_sessions.sql
 ```
 
-Existing volumes created before the customer profile need `003_user_profile_birth_date.sql` applied the same way (it only adds a nullable column). Volumes created before the demo form library need `004_form_template_category.sql` (adds the nullable `category` and `seed_key` columns), volumes created before the symptom descriptions need `005_symptom_descriptions.sql` (adds one table), and volumes created before professional customer access need `006_professional_customer_access.sql` (adds one table).
+Existing volumes created before the customer profile need `003_user_profile_birth_date.sql` applied the same way (it only adds a nullable column). Volumes created before the demo form library need `004_form_template_category.sql` (adds the nullable `category` and `seed_key` columns), volumes created before the symptom descriptions need `005_symptom_descriptions.sql` (adds one table), volumes created before professional customer access need `006_professional_customer_access.sql` (adds one table), and volumes created before submission snapshots need `007_submission_field_snapshots.sql` (adds one table and backfills existing submitted forms; safe to run again).
 
 ## Authentication
 
@@ -213,7 +214,7 @@ Prefill: on a new form with earlier own data, the user chooses "Käytä aiempia 
 
 ## Submitted forms
 
-"Omat lähetykset" (`/submissions`) lists a customer's submitted forms with the form name, submission time, status and reference code. Opening one (`/submissions/[id]`) shows every question of the form in order with the submitted answer (dates and decimals in Finnish format, "Ei annettu" for questions left empty). Submitted forms are read-only. Only the user's own `SUBMITTED` forms are listed; another user's id gives `404`, also for `ADMIN` and `PROFESSIONAL`.
+"Omat lähetykset" (`/submissions`) lists a customer's submitted forms with the form name, submission time, status and reference code. Opening one (`/submissions/[id]`) shows every question of the form in order with the submitted answer (dates and decimals in Finnish format, "Ei annettu" for questions left empty). Questions come from a snapshot taken when the form was submitted (`submission_field_snapshots`), so later edits to the form do not change a submitted form. Forms submitted before snapshots existed were backfilled from the then-current form, which is a best-effort copy. Submitted forms are read-only. Only the user's own `SUBMITTED` forms are listed; another user's id gives `404`, also for `ADMIN` and `PROFESSIONAL`.
 
 ## Customer profile
 
