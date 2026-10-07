@@ -51,9 +51,7 @@ export function CustomerSubmissionDetail({ customerId, submissionId }: { custome
         <h2 id="answers-heading" className={sectionHeading}>
           Vastaukset
         </h2>
-        <p className="mt-1 text-ink-muted">
-          Kysymykset näytetään lomakkeen nykyisillä teksteillä. Tyhjäksi jätetyt kysymykset on merkitty.
-        </p>
+        <p className="mt-1 text-ink-muted">Tyhjäksi jätetyt kysymykset on merkitty.</p>
         <div className="mt-4">
           <AnswerList items={submission.answers} />
         </div>
