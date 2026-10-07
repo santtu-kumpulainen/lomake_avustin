@@ -20,4 +20,10 @@ export const config = {
     // Must be true when served over HTTPS; plain http://localhost needs false.
     cookieSecure: process.env.COOKIE_SECURE === "true",
   },
+  // Optional: without a base URL and model the AI endpoint answers 503 and forms work as before.
+  ai: {
+    baseUrl: (process.env.OLLAMA_BASE_URL ?? "").replace(/\/+$/, ""),
+    model: process.env.OLLAMA_MODEL ?? "",
+    timeoutMs: Number(process.env.OLLAMA_TIMEOUT_MS ?? 30000),
+  },
 };

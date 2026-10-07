@@ -15,14 +15,14 @@ Build a simple, working MVP covering the core features: form template management
 | Frontend | Next.js, TypeScript, Tailwind CSS |
 | Backend | Express, TypeScript |
 | Database | MariaDB |
-| AI (later) | Ollama, called only by the backend |
+| AI | Ollama (optional, local), called only by the backend |
 | Dev environment | Docker Compose |
 
 ## Architecture
 
 ```text
 Browser -> Next.js (frontend) -> REST API (/api/*) -> Express (backend) -> MariaDB
-                                                      Express -> Ollama (later)
+                                                      Express -> Ollama (optional)
 ```
 
 The browser only talks to the frontend. Next.js proxies `/api/*` to the backend, so no CORS setup is needed.
@@ -191,6 +191,28 @@ The backend validates every answer against the stored field definitions: require
 Drafts: "Tallenna luonnos" saves an incomplete form, and the forms page lists the user's drafts to continue. Draft answers are merged (sent fields are saved, empty values clear an answer, others stay) and type-checked, but required fields may stay empty. Submitting a draft runs the full validation; on any error nothing changes and it stays a draft. A draft's reference code is shown only after it is submitted. If its form is unpublished, the draft is kept but cannot be changed or submitted until the form is published again.
 
 Prefill: on a new form with earlier own data, the user chooses "Käytä aiempia tietojani" or "Täytä tyhjänä". Values are fetched only after consent, matched by field id within the same template, fill only empty fields, are marked "Esitäytetty aiemmista tiedoista" and stay editable. Only the user's own submitted forms are used (never drafts), any `userId` parameter is rejected, and submitting creates a new submission without changing the earlier one.
+
+## AI question explanations
+
+Each form question has a "Selitä kysymys" button. The backend asks a local Ollama model to explain the question in plain Finnish, and the result is shown under the question marked "AI-avustus". The answer field is never changed.
+
+| Endpoint | Description |
+| --- | --- |
+| `POST /api/ai/explain` | `{ question, description?, fieldType, options? }` -> `200 { explanation }`; `400` validation, `401`, `503 { error: "AI unavailable" }` |
+
+Configuration in `.env` (all optional; empty disables AI and forms work as before):
+
+```bash
+OLLAMA_BASE_URL=http://host.docker.internal:11434   # Ollama on the host; it must listen beyond 127.0.0.1 (OLLAMA_HOST=0.0.0.0)
+OLLAMA_MODEL=gemma3:4b                              # the model tested for the MVP; any pulled model works
+OLLAMA_TIMEOUT_MS=30000
+```
+
+Recreate the backend after changing these: `docker compose up -d backend`.
+
+Privacy boundary: only the question text, its help text, the field type and SELECT options are sent to Ollama. Never answers, drafts, earlier submissions, user ids, emails or reference codes; any other request key is rejected with `400`. The prompt forbids diagnosis, treatment advice, invented information and answering for the user. Any Ollama failure (not configured, offline, timeout, error, invalid output) returns a generic `503` and the form stays fully usable. Explanations are not stored. Tests mock Ollama, so no running model is needed.
+
+Tested end to end with `gemma3:4b` (about 1.5 s per explanation on a 6 GB GPU). Known limitations: date questions may get relative examples such as "viime viikolla" instead of a calendar date, unclear questions tend to be interpreted rather than flagged as unclear, and some Finnish phrasing is awkward. The output is always labelled as AI-generated.
 
 ## Running without Docker
 

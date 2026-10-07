@@ -27,6 +27,13 @@ services:
       DB_NAME: ${MARIADB_DATABASE:?set in .env}
       SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-24}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      # Optional. Empty disables AI help; the forms still work.
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-}
+      OLLAMA_TIMEOUT_MS: ${OLLAMA_TIMEOUT_MS:-30000}
+    # Lets the container reach an Ollama running on the host as host.docker.internal.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "127.0.0.1:${BACKEND_PORT:-4000}:4000"
     volumes:
