@@ -9,7 +9,7 @@ export default function ProfessionalPage() {
     <Page width="wide">
       <PageHeader
         title="Ammattilaisen työpöytä"
-        lead="Yhteenveto asiakkaiden lähettämistä lomakkeista. Yksittäisten asiakkaiden tiedot eivät näy tässä näkymässä."
+        lead="Omat asiakkaasi ja yhteenveto asiakkaiden lähettämistä lomakkeista."
       />
       <ProfessionalDashboard />
     </Page>

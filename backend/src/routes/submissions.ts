@@ -155,7 +155,7 @@ type SubmissionRow = {
  * The owner's submission. `withUnanswered` (detail view) also lists questions of a submitted
  * form that were left empty, since empty optional answers are not stored as rows.
  */
-async function loadSubmission(
+export async function loadSubmission(
   conn: PoolConnection | typeof pool,
   id: number,
   userId: number,
@@ -211,6 +211,27 @@ async function loadSubmission(
       value: answer.answer_value,
     })),
   };
+}
+
+/** Submitted forms of `userId`, newest first. Drafts are never included. */
+export async function listSubmitted(userId: number) {
+  const rows: Pick<SubmissionRow, "id" | "form_template_id" | "form_name" | "status" | "reference_code" | "submitted_at">[] =
+    await pool.query(
+      `SELECT s.id, s.form_template_id, t.name AS form_name, s.status, s.reference_code, s.submitted_at
+         FROM form_submissions s
+         JOIN form_templates t ON t.id = s.form_template_id
+        WHERE s.user_id = ? AND s.status = 'SUBMITTED'
+        ORDER BY s.submitted_at DESC, s.id DESC`,
+      [userId],
+    );
+  return rows.map((row) => ({
+    id: row.id,
+    formTemplateId: row.form_template_id,
+    formName: row.form_name,
+    status: row.status,
+    referenceCode: row.reference_code,
+    submittedAt: row.submitted_at,
+  }));
 }
 
 submissionsRouter.use(requireAuth);
@@ -324,25 +345,7 @@ submissionsRouter.get("/", async (req, res) => {
     });
     return;
   }
-  const rows: Pick<SubmissionRow, "id" | "form_template_id" | "form_name" | "status" | "reference_code" | "submitted_at">[] =
-    await pool.query(
-      `SELECT s.id, s.form_template_id, t.name AS form_name, s.status, s.reference_code, s.submitted_at
-         FROM form_submissions s
-         JOIN form_templates t ON t.id = s.form_template_id
-        WHERE s.user_id = ? AND s.status = 'SUBMITTED'
-        ORDER BY s.submitted_at DESC, s.id DESC`,
-      [req.user!.id],
-    );
-  res.json({
-    submissions: rows.map((row) => ({
-      id: row.id,
-      formTemplateId: row.form_template_id,
-      formName: row.form_name,
-      status: row.status,
-      referenceCode: row.reference_code,
-      submittedAt: row.submitted_at,
-    })),
-  });
+  res.json({ submissions: await listSubmitted(req.user!.id) });
 });
 
 // The current user's drafts only. Registered before "/:id" so "drafts" is not parsed as an id.

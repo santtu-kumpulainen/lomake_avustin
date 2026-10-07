@@ -71,7 +71,7 @@ Returns `200` with `{"status":"ok","database":"ok",...}` when the backend and da
 
 ## Database
 
-The schema lives in `database/init/` (`001_schema.sql`, `002_sessions.sql`, `003_user_profile_birth_date.sql`, `004_form_template_category.sql`, `005_symptom_descriptions.sql`) and is applied automatically the first time MariaDB starts with an empty volume.
+The schema lives in `database/init/` (`001_schema.sql`, `002_sessions.sql`, `003_user_profile_birth_date.sql`, `004_form_template_category.sql`, `005_symptom_descriptions.sql`, `006_professional_customer_access.sql`) and is applied automatically the first time MariaDB starts with an empty volume.
 
 | Table | Purpose |
 | --- | --- |
@@ -82,6 +82,7 @@ The schema lives in `database/init/` (`001_schema.sql`, `002_sessions.sql`, `003
 | `form_submissions` | A user's draft or submitted form with a reference code such as `LA-7F42K9` |
 | `form_answers` | One answer per field per submission, with a prefilled flag |
 | `symptom_descriptions` | A customer's own descriptions of why they seek help, newest first |
+| `professional_customer_access` | Explicit professional -> customer assignments made by an admin; the only source of a professional's access to a customer |
 | `customer_contacts` | Synthetic contact history for the professional view |
 | `sessions` | Login sessions (SHA-256 hash of the cookie token, expiry) |
 
@@ -95,7 +96,7 @@ To add a new init file to an existing volume without deleting data, run it once 
 docker compose exec -T mariadb sh -c 'mariadb -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE"' < database/init/002_sessions.sql
 ```
 
-Existing volumes created before the customer profile need `003_user_profile_birth_date.sql` applied the same way (it only adds a nullable column). Volumes created before the demo form library need `004_form_template_category.sql` (adds the nullable `category` and `seed_key` columns), and volumes created before the symptom descriptions need `005_symptom_descriptions.sql` (adds one table).
+Existing volumes created before the customer profile need `003_user_profile_birth_date.sql` applied the same way (it only adds a nullable column). Volumes created before the demo form library need `004_form_template_category.sql` (adds the nullable `category` and `seed_key` columns), volumes created before the symptom descriptions need `005_symptom_descriptions.sql` (adds one table), and volumes created before professional customer access need `006_professional_customer_access.sql` (adds one table).
 
 ## Authentication
 
@@ -278,7 +279,7 @@ Tested with `gemma3:4b` (about 0.6 s per request when the model is warm). Known 
 
 ## Professional dashboard
 
-Professionals (`PROFESSIONAL`) get their own menu and a dashboard, "Ammattilaisen työpöytä" (`/professional`). It shows aggregate counts only; no individual customer's data is available to professionals yet.
+Professionals (`PROFESSIONAL`) get their own menu and a dashboard, "Ammattilaisen työpöytä" (`/professional`). It shows the professional's assigned customers and aggregate counts.
 
 | Endpoint | Response |
 | --- | --- |
@@ -286,7 +287,28 @@ Professionals (`PROFESSIONAL`) get their own menu and a dashboard, "Ammattilaise
 
 - Counts only customers' (`USER`) submitted forms; drafts and staff accounts' own submissions are excluded. Days are Finnish calendar days (`Europe/Helsinki`), the 7-day window includes today, and the form list holds at most 10 forms.
 - The response has no customer ids, emails, names, phone numbers, dates of birth, descriptions, answers or reference codes, and the route accepts no `userId`/`customerId`.
-- Professional access to individual customers needs an explicit professional-customer relationship and will be a separate, controlled feature.
+- The aggregate counts cover all customers; individual data is available only through the assignment-based routes below.
+
+## Professional customer access
+
+A professional sees an individual customer only when an admin has assigned that customer to them (`professional_customer_access`). The role alone grants nothing. Admins manage assignments in "Asiakkuudet" (`/admin/professional-customers`); professionals see their customers on the dashboard and open them at `/professional/customers/[id]` (profile, reasons for seeking help, submitted forms and answers). Everything is read-only.
+
+| Endpoint | Role | Response |
+| --- | --- | --- |
+| `GET /api/admin/professional-customers` | ADMIN | `{ assignments: [{ id, createdAt, professional: { id, email }, customer: { id, email, firstName, lastName } }] }` |
+| `GET /api/admin/professional-customers/options` | ADMIN | `{ professionals: [{ id, email }], customers: [{ id, email, firstName, lastName }] }`, only accounts with the right role |
+| `POST /api/admin/professional-customers` | ADMIN | `{ professionalId, customerId }` -> `201 { assignment }`; `400` missing/invalid/unexpected keys, `not_found`, `invalid_role`; `409` duplicate |
+| `DELETE /api/admin/professional-customers/:id` | ADMIN | `204`; `404` |
+| `GET /api/professional/customers` | PROFESSIONAL | `{ customers: [{ id, firstName, lastName, dateOfBirth }] }`, own assignments only |
+| `GET /api/professional/customers/:customerId` | PROFESSIONAL | `{ customer: { id, firstName, lastName, dateOfBirth, phone } }` (no email) |
+| `GET /api/professional/customers/:customerId/symptom-descriptions` | PROFESSIONAL | `{ symptomDescriptions: [{ description, createdAt }] }`, newest first |
+| `GET /api/professional/customers/:customerId/submissions` | PROFESSIONAL | `{ submissions }`, `SUBMITTED` only |
+| `GET /api/professional/customers/:customerId/submissions/:submissionId` | PROFESSIONAL | `{ submission: { id, formTemplateId, formName, status, referenceCode, submittedAt, answers } }` |
+
+- Every `:customerId` route passes one gate (`router.param`): the professional is the session user, the assignment must exist, and both roles are re-checked in the same query. An unassigned, unknown or malformed id, a draft and another customer's submission all get the same `404`.
+- Admin routes return `401`/`403` to others; professional routes return `401`, `403` USER/ADMIN, and `400` for any query parameter (`userId`, `professionalId`...).
+- Deleting either user deletes their assignments (`ON DELETE CASCADE`). Existing customer routes (`/api/profile`, `/api/symptom-descriptions`, `/api/submissions`) are unchanged and still owner-only.
+- No customer data is sent to Ollama by these routes.
 
 ## Running without Docker
 
