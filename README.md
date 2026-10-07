@@ -276,6 +276,18 @@ On `/symptoms` the customer can choose "Ehdota sopivaa lomaketta". The backend s
 
 Tested with `gemma3:4b` (about 0.6 s per request when the model is warm). Known limitation: practical questions unrelated to health (such as opening hours) tend to get the general "Vastaanoton esitiedot" form rather than no suggestion, and the reason sometimes repeats a word from the description.
 
+## Professional dashboard
+
+Professionals (`PROFESSIONAL`) get their own menu and a dashboard, "Ammattilaisen työpöytä" (`/professional`). It shows aggregate counts only; no individual customer's data is available to professionals yet.
+
+| Endpoint | Response |
+| --- | --- |
+| `GET /api/professional/dashboard` | `{ dashboard: { submittedForms: { today, last7Days, total }, formsLast7Days: [{ formTemplateId, name, category, submittedForms }] } }`; `401`, `403` USER/ADMIN, `400` for any query parameter |
+
+- Counts only customers' (`USER`) submitted forms; drafts and staff accounts' own submissions are excluded. Days are Finnish calendar days (`Europe/Helsinki`), the 7-day window includes today, and the form list holds at most 10 forms.
+- The response has no customer ids, emails, names, phone numbers, dates of birth, descriptions, answers or reference codes, and the route accepts no `userId`/`customerId`.
+- Professional access to individual customers needs an explicit professional-customer relationship and will be a separate, controlled feature.
+
 ## Running without Docker
 
 Each app has its own `.env.example`. Copy it to `.env`, then run `npm install` and `npm run dev` in `frontend/` or `backend/`.

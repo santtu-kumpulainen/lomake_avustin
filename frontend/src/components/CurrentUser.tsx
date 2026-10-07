@@ -50,11 +50,17 @@ export function CurrentUser() {
           },
         ]
       : []),
-    {
-      href: "/forms",
-      title: "Täytä lomake",
-      text: "Valitse lomake tai jatka keskeneräistä luonnosta.",
-    },
+    user.role === "PROFESSIONAL"
+      ? {
+          href: "/professional",
+          title: "Ammattilaisen työpöytä",
+          text: "Katso yhteenveto asiakkaiden lähettämistä lomakkeista.",
+        }
+      : {
+          href: "/forms",
+          title: "Täytä lomake",
+          text: "Valitse lomake tai jatka keskeneräistä luonnosta.",
+        },
     ...(user.role === "USER"
       ? [
           {
