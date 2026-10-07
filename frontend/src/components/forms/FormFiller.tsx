@@ -57,8 +57,15 @@ export function FormFiller({ id, draftId }: { id: number; draftId?: number }) {
   const [prefill, setPrefill] = useState<PrefillState>();
   // Fields still showing a value taken from previous data; editing a field removes its mark.
   const [prefilledIds, setPrefilledIds] = useState<Set<number>>(new Set());
+  // "review" shows the summary; nothing is sent to the server until the user confirms there.
+  const [step, setStep] = useState<"edit" | "review">("edit");
+  const [confirmed, setConfirmed] = useState(false);
+  const [confirmError, setConfirmError] = useState<string>();
   const summaryRef = useRef<HTMLDivElement>(null);
   const successRef = useRef<HTMLHeadingElement>(null);
+  const reviewRef = useRef<HTMLHeadingElement>(null);
+  // Element to focus after the next step change (review heading or a field to edit).
+  const focusAfterStep = useRef<string>(undefined);
 
   useEffect(() => {
     async function load() {
@@ -97,6 +104,15 @@ export function FormFiller({ id, draftId }: { id: number; draftId?: number }) {
   useEffect(() => {
     if (submitted) successRef.current?.focus();
   }, [submitted]);
+
+  useEffect(() => {
+    const target = focusAfterStep.current;
+    focusAfterStep.current = undefined;
+    if (!target) return;
+    const element = target === "review" ? reviewRef.current : document.getElementById(target);
+    element?.focus();
+    element?.scrollIntoView({ block: "center" });
+  }, [step]);
 
   if (loadError) return <ErrorMessage className="mt-8">{loadError}</ErrorMessage>;
   if (!template) return <p className="mt-8 text-sm text-neutral-500">Ladataan…</p>;
@@ -173,7 +189,8 @@ export function FormFiller({ id, draftId }: { id: number; draftId?: number }) {
     showErrors(fieldErrors, message);
   }
 
-  async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
+  // Opening the summary only runs the client checks; it never sends answers anywhere.
+  function handleReview(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     setDraftNotice(undefined);
     const clientErrors = checkAnswers(fields, values);
@@ -181,7 +198,28 @@ export function FormFiller({ id, draftId }: { id: number; draftId?: number }) {
       showErrors(clientErrors);
       return;
     }
+    setErrors({});
+    setFormError(undefined);
+    setConfirmed(false);
+    setConfirmError(undefined);
+    focusAfterStep.current = "review";
+    setStep("review");
+  }
 
+  function handleEdit(field?: FormField) {
+    // Without a specific field, start from the first one so focus is not lost.
+    const target = field ?? fields[0];
+    focusAfterStep.current = target ? fieldId(target) : undefined;
+    setStep("edit");
+  }
+
+  // The checkbox is a UI safeguard only; the backend still validates and checks ownership.
+  async function handleConfirmSubmit() {
+    if (!confirmed) {
+      setConfirmError("Vahvista ensin, että olet tarkistanut vastaukset.");
+      document.getElementById("confirm-submit")?.focus();
+      return;
+    }
     setPending("submit");
     // A draft is submitted through its own record so it leaves the draft list.
     const result = draft ? await submitDraft(draft.id, values) : await submitForm(id, values);
@@ -191,6 +229,8 @@ export function FormFiller({ id, draftId }: { id: number; draftId?: number }) {
       setSubmitted({ referenceCode: referenceCode!, submittedAt: submittedAt! });
       return;
     }
+    // Server-side errors are shown on the form, where the answers can be fixed.
+    setStep("edit");
     showFailure(result);
   }
 
@@ -245,7 +285,7 @@ export function FormFiller({ id, draftId }: { id: number; draftId?: number }) {
   const errorFields = fields.filter((field) => errors[field.id]);
   const hasErrors = errorFields.length > 0 || Boolean(formError);
 
-  return (
+  const header = (
     <>
       <h1 className="mt-6 text-3xl font-semibold tracking-tight">{template.name}</h1>
       {draft && (
@@ -256,6 +296,94 @@ export function FormFiller({ id, draftId }: { id: number; draftId?: number }) {
           Tallennettu {new Date(draft.updatedAt).toLocaleString("fi-FI")}. Ei vielä lähetetty.
         </p>
       )}
+    </>
+  );
+
+  if (step === "review") {
+    return (
+      <>
+        {header}
+        <section aria-labelledby="review-heading" className="mt-8">
+          <h2 ref={reviewRef} id="review-heading" tabIndex={-1} className="text-xl font-semibold outline-none">
+            Tarkista vastauksesi
+          </h2>
+          <p className="mt-2 text-sm text-neutral-600">
+            Lomaketta ei ole vielä lähetetty. Tarkista vastaukset ja korjaa tarvittaessa ennen lähettämistä.
+          </p>
+          <dl className="mt-6 divide-y divide-neutral-200 border-y border-neutral-200">
+            {fields.map((field) => (
+              <div key={field.id} className="flex items-start justify-between gap-4 py-4">
+                <div className="min-w-0">
+                  <dt className="text-sm text-neutral-600">{field.label}</dt>
+                  <dd className="mt-1 whitespace-pre-line wrap-anywhere">
+                    {formatAnswer(field, values[field.id]) ?? (
+                      <span className="text-neutral-500 italic">Ei annettu</span>
+                    )}
+                  </dd>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleEdit(field)}
+                  aria-label={`Muokkaa: ${field.label}`}
+                  className="shrink-0 text-sm font-medium underline underline-offset-4"
+                >
+                  Muokkaa
+                </button>
+              </div>
+            ))}
+          </dl>
+
+          <div className="mt-8">
+            <div className="flex items-start gap-3">
+              <input
+                id="confirm-submit"
+                type="checkbox"
+                checked={confirmed}
+                onChange={(e) => {
+                  setConfirmed(e.target.checked);
+                  if (e.target.checked) setConfirmError(undefined);
+                }}
+                aria-invalid={confirmError ? true : undefined}
+                aria-describedby={confirmError ? "confirm-submit-error" : undefined}
+                className="mt-0.5 size-4 shrink-0 accent-neutral-900"
+              />
+              <label htmlFor="confirm-submit" className="text-sm">
+                Olen tarkistanut vastaukseni ja haluan lähettää lomakkeen. Lähetettyä lomaketta ei voi
+                enää muokata.
+              </label>
+            </div>
+            {confirmError && (
+              <p id="confirm-submit-error" className="mt-1.5 text-sm text-red-800">
+                {confirmError}
+              </p>
+            )}
+          </div>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={handleConfirmSubmit}
+              disabled={Boolean(pending)}
+              className={primaryButton}
+            >
+              {pending === "submit" ? "Lähetetään…" : "Lähetä lomake"}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleEdit()}
+              disabled={Boolean(pending)}
+              className={secondaryButton}
+            >
+              Muokkaa vastauksia
+            </button>
+          </div>
+        </section>
+      </>
+    );
+  }
+
+  return (
+    <>
+      {header}
       {template.description && (
         <p className="mt-2 whitespace-pre-line text-neutral-600">{template.description}</p>
       )}
@@ -297,7 +425,7 @@ export function FormFiller({ id, draftId }: { id: number; draftId?: number }) {
       </div>
 
       {/* noValidate: errors are shown in one consistent style from the same rules as the backend. */}
-      <form onSubmit={handleSubmit} noValidate className="mt-8 space-y-6">
+      <form onSubmit={handleReview} noValidate className="mt-8 space-y-6">
         {fields.map((field) => (
           <AnswerField
             key={field.id}
@@ -310,7 +438,7 @@ export function FormFiller({ id, draftId }: { id: number; draftId?: number }) {
         ))}
         <div className="flex flex-wrap gap-3">
           <button type="submit" disabled={Boolean(pending)} className={primaryButton}>
-            {pending === "submit" ? "Lähetetään…" : "Lähetä lomake"}
+            Jatka yhteenvetoon
           </button>
           <button
             type="button"
@@ -327,6 +455,19 @@ export function FormFiller({ id, draftId }: { id: number; draftId?: number }) {
       </form>
     </>
   );
+}
+
+/** Readable answer for the summary, or undefined when nothing was given. */
+function formatAnswer(field: FormField, value: string | undefined) {
+  const trimmed = (value ?? "").trim();
+  if (!trimmed) return undefined;
+  if (field.fieldType === "DATE") {
+    // Parsed by hand so the shown day never shifts with the time zone.
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+    if (match) return `${Number(match[3])}.${Number(match[2])}.${match[1]}`;
+  }
+  // SELECT values are the option texts themselves, so they are already readable.
+  return trimmed;
 }
 
 type PrefillNoticeProps = {

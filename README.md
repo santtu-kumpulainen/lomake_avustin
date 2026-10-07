@@ -190,6 +190,8 @@ The backend validates every answer against the stored field definitions: require
 
 Drafts: "Tallenna luonnos" saves an incomplete form, and the forms page lists the user's drafts to continue. Draft answers are merged (sent fields are saved, empty values clear an answer, others stay) and type-checked, but required fields may stay empty. Submitting a draft runs the full validation; on any error nothing changes and it stays a draft. A draft's reference code is shown only after it is submitted. If its form is unpublished, the draft is kept but cannot be changed or submitted until the form is published again.
 
+Summary: "Jatka yhteenvetoon" runs the client checks and shows every answer in form order ("Ei annettu" for empty optional fields) without sending anything. The user can go back to edit, and "Lähetä lomake" works only after the confirmation checkbox is ticked. The final submit uses the same endpoints above, so backend validation and ownership checks still decide; a server-side error returns the user to the form.
+
 Prefill: on a new form with earlier own data, the user chooses "Käytä aiempia tietojani" or "Täytä tyhjänä". Values are fetched only after consent, matched by field id within the same template, fill only empty fields, are marked "Esitäytetty aiemmista tiedoista" and stay editable. Only the user's own submitted forms are used (never drafts), any `userId` parameter is rejected, and submitting creates a new submission without changing the earlier one.
 
 ## AI question explanations
