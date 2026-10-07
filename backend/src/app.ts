@@ -3,6 +3,7 @@ import { aiRouter } from "./routes/ai.js";
 import { authRouter } from "./routes/auth.js";
 import { formsRouter } from "./routes/forms.js";
 import { healthRouter } from "./routes/health.js";
+import { profileRouter } from "./routes/profile.js";
 import { submissionsRouter } from "./routes/submissions.js";
 
 export const app = express();
@@ -15,6 +16,7 @@ app.use("/api/auth", authRouter);
 app.use("/api/forms", formsRouter);
 app.use("/api/submissions", submissionsRouter);
 app.use("/api/ai", aiRouter);
+app.use("/api/profile", profileRouter);
 
 app.use((_req, res) => {
   res.status(404).json({ error: "Not found" });

@@ -71,12 +71,12 @@ Returns `200` with `{"status":"ok","database":"ok",...}` when the backend and da
 
 ## Database
 
-The schema lives in `database/init/` (`001_schema.sql`, `002_sessions.sql`) and is applied automatically the first time MariaDB starts with an empty volume.
+The schema lives in `database/init/` (`001_schema.sql`, `002_sessions.sql`, `003_user_profile_birth_date.sql`) and is applied automatically the first time MariaDB starts with an empty volume.
 
 | Table | Purpose |
 | --- | --- |
 | `users` | Login identity and role (`USER`, `ADMIN`, `PROFESSIONAL`) |
-| `user_profiles` | One-to-one profile data for a user |
+| `user_profiles` | One-to-one customer profile: first and last name, date of birth, phone |
 | `form_templates` | Reusable form definitions (`DRAFT`, `PUBLISHED`, `ARCHIVED`) |
 | `form_fields` | Ordered fields of a template (`TEXT`, `NUMBER`, `DATE`, `SELECT`) |
 | `form_submissions` | A user's draft or submitted form with a reference code such as `LA-7F42K9` |
@@ -93,6 +93,8 @@ To add a new init file to an existing volume without deleting data, run it once 
 ```bash
 docker compose exec -T mariadb sh -c 'mariadb -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE"' < database/init/002_sessions.sql
 ```
+
+Existing volumes created before the customer profile need `003_user_profile_birth_date.sql` applied the same way (it only adds a nullable column).
 
 ## Authentication
 
@@ -148,7 +150,7 @@ This needs shell access to the backend, so the API has no role escalation path. 
 docker compose exec backend npm test
 ```
 
-Integration tests run against the configured MariaDB, create `@example.test` users, test form templates, drafts and submissions, and delete them afterwards.
+Integration tests run against the configured MariaDB, create `@example.test` users, test form templates, drafts and submissions, and delete them afterwards. Test files run one at a time (`--test-concurrency=1`): they share one database, and parallel files deadlocked each other's setup and cleanup.
 
 After pulling dependency changes, rebuild the backend so its container `node_modules` volume is refreshed: `docker compose up -d --build -V backend`.
 
@@ -193,6 +195,17 @@ Drafts: "Tallenna luonnos" saves an incomplete form, and the forms page lists th
 Summary: "Jatka yhteenvetoon" runs the client checks and shows every answer in form order ("Ei annettu" for empty optional fields) without sending anything. The user can go back to edit, and "Lähetä lomake" works only after the confirmation checkbox is ticked. The final submit uses the same endpoints above, so backend validation and ownership checks still decide; a server-side error returns the user to the form.
 
 Prefill: on a new form with earlier own data, the user chooses "Käytä aiempia tietojani" or "Täytä tyhjänä". Values are fetched only after consent, matched by field id within the same template, fill only empty fields, are marked "Esitäytetty aiemmista tiedoista" and stay editable. Only the user's own submitted forms are used (never drafts), any `userId` parameter is rejected, and submitting creates a new submission without changing the earlier one.
+
+## Customer profile
+
+Signed-in customers (`USER`) see and edit their own basic information on "Omat tiedot" (`/profile`).
+
+| Endpoint | Description |
+| --- | --- |
+| `GET /api/profile` | `{ profile: { email, firstName, lastName, dateOfBirth, phone, updatedAt } }`; empty values until the first save |
+| `PUT /api/profile` | `{ firstName, lastName, dateOfBirth, phone }` replaces the user's own profile |
+
+The owner always comes from the session; the routes take no user id, and any other request key (`userId`, `email`, `role`...) is rejected with `400`. `ADMIN` and `PROFESSIONAL` get `403`. Email is the login identity from `users` and is read-only here. First and last name are required; date of birth (a real date from 1900 to today) and phone (digits with optional `+`, spaces, dashes, parentheses; 5-15 digits) are optional.
 
 ## AI question explanations
 

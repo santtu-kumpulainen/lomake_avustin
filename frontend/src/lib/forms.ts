@@ -105,12 +105,14 @@ const statusMessages: Record<number, string> = {
 /**
  * `conflictMessage` is shown for 409, whose cause depends on the action
  * (publishing without fields, editing a published template, deleting a used template).
+ * `messages` translates field error codes of other resources (e.g. the profile).
  */
 export async function apiRequest<T>(
   method: string,
   url: string,
   body?: unknown,
   conflictMessage = genericError,
+  messages?: Record<string, Record<string, string>>,
 ): Promise<ApiResult<T>> {
   let res: Response;
   try {
@@ -132,7 +134,8 @@ export async function apiRequest<T>(
     const fieldErrors: FieldErrors = {};
     for (const [field, code] of Object.entries(json.fields as Record<string, string>)) {
       // Answer errors are keyed by field id, so they are translated by code alone.
-      fieldErrors[field] = fieldMessages[field]?.[code] ?? answerMessages[code] ?? genericError;
+      fieldErrors[field] =
+        messages?.[field]?.[code] ?? fieldMessages[field]?.[code] ?? answerMessages[code] ?? genericError;
     }
     return { ok: false, status: 400, fieldErrors };
   }

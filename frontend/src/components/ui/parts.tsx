@@ -161,6 +161,7 @@ type TextFieldProps = {
   idPrefix?: string;
   defaultValue?: string | null;
   optional?: boolean;
+  required?: boolean;
   multiline?: boolean;
   hint?: string;
   error?: string;
@@ -174,6 +175,7 @@ export function TextField({
   idPrefix = "",
   defaultValue,
   optional,
+  required,
   multiline,
   hint,
   error,
@@ -188,6 +190,7 @@ export function TextField({
     name,
     defaultValue: defaultValue ?? undefined,
     autoComplete,
+    "aria-required": required || undefined,
     "aria-invalid": error ? true : undefined,
     "aria-describedby": [hintId, errorId].filter(Boolean).join(" ") || undefined,
     className: `${inputClass} ${borderFor(error)}`,
