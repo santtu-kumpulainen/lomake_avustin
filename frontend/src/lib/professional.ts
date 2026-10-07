@@ -1,5 +1,5 @@
 import { apiRequest } from "./forms";
-import type { Submission, SubmittedSummary } from "./submissions";
+import type { Submission } from "./submissions";
 
 export type ProfessionalDashboard = {
   // Customers' submitted forms only; drafts and staff accounts are not counted.
@@ -26,7 +26,11 @@ export type AssignedCustomer = {
 
 export type CustomerProfile = AssignedCustomer & { phone: string | null };
 
-export type CustomerDescription = { description: string; createdAt: string };
+// Newest first, ordered by the backend (database time, then a fixed tie-break). Built only from
+// the customer's symptom descriptions and submitted forms; drafts are never included.
+export type TimelineEvent =
+  | { type: "SYMPTOM_DESCRIPTION"; occurredAt: string; description: string }
+  | { type: "SUBMISSION"; occurredAt: string; submissionId: number; formName: string; answerCount: number };
 
 /** Display name, or a neutral label with the customer number when no profile exists yet. */
 export function customerName(customer: Pick<AssignedCustomer, "id" | "firstName" | "lastName">) {
@@ -50,12 +54,8 @@ export function getCustomer(id: number) {
   return apiRequest<{ customer: CustomerProfile }>("GET", `${base}/${id}`);
 }
 
-export function getCustomerDescriptions(id: number) {
-  return apiRequest<{ symptomDescriptions: CustomerDescription[] }>("GET", `${base}/${id}/symptom-descriptions`);
-}
-
-export function getCustomerSubmissions(id: number) {
-  return apiRequest<{ submissions: SubmittedSummary[] }>("GET", `${base}/${id}/submissions`);
+export function getCustomerTimeline(id: number) {
+  return apiRequest<{ timeline: TimelineEvent[] }>("GET", `${base}/${id}/timeline`);
 }
 
 export type CustomerSubmission = Pick<
