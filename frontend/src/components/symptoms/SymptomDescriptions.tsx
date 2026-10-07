@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState, type SubmitEvent } from "react";
+import { recommendForm } from "@/lib/ai";
 import { formatDateTime } from "@/lib/submissions";
 import {
   checkDescription,
@@ -10,6 +11,7 @@ import {
   listSymptomDescriptions,
   type SymptomDescription,
 } from "@/lib/symptoms";
+import { FormRecommendation, recommendUnavailable, type RecommendState } from "./FormRecommendation";
 import { EmptyState, ErrorMessage, FieldError, Loading, Notice } from "@/components/ui/parts";
 import {
   borderFor,
@@ -18,6 +20,7 @@ import {
   labelClass,
   panel,
   primaryButton,
+  secondaryButton,
   sectionHeading,
   textLink,
 } from "@/components/ui/styles";
@@ -35,7 +38,9 @@ export function SymptomDescriptions() {
   const [formError, setFormError] = useState<string>();
   const [saved, setSaved] = useState<string>();
   const [pending, setPending] = useState(false);
+  const [recommend, setRecommend] = useState<RecommendState>({ step: "idle" });
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const recommendButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     listSymptomDescriptions().then((result) => {
@@ -92,6 +97,38 @@ export function SymptomDescriptions() {
     else setFormError(result.formError ?? Object.values(result.fieldErrors)[0]);
   }
 
+  // Uses the text as typed; nothing is saved and the textarea is left untouched.
+  async function handleRecommend() {
+    setSaved(undefined);
+    setFormError(undefined);
+    const clientError = checkDescription(text);
+    if (clientError) {
+      showFieldError(clientError);
+      return;
+    }
+    setFieldError(undefined);
+    setRecommend({ step: "loading" });
+    const result = await recommendForm(text);
+    if (result.ok) {
+      const { recommendation } = result.data;
+      setRecommend(recommendation ? { step: "shown", recommendation } : { step: "none" });
+      return;
+    }
+    if (result.fieldErrors.description) {
+      setRecommend({ step: "idle" });
+      showFieldError(result.fieldErrors.description);
+      return;
+    }
+    // An expired session is worth saying; every other failure gets the same plain message.
+    setRecommend({ step: "failed", message: result.status === 401 ? result.formError! : recommendUnavailable });
+  }
+
+  function dismissRecommendation() {
+    setRecommend({ step: "idle" });
+    // The panel disappears, so focus returns to the button that asked for it.
+    recommendButtonRef.current?.focus();
+  }
+
   const length = text.trim().length;
   const tooLong = length > DESCRIPTION_MAX;
 
@@ -120,6 +157,8 @@ export function SymptomDescriptions() {
                 setText(event.target.value);
                 setFieldError(undefined);
                 setSaved(undefined);
+                // A suggestion for different text would be misleading.
+                setRecommend({ step: "idle" });
               }}
               aria-required="true"
               aria-invalid={fieldError ? true : undefined}
@@ -137,18 +176,29 @@ export function SymptomDescriptions() {
             {fieldError && <FieldError id="description-error">{fieldError}</FieldError>}
           </div>
           <p className="text-[0.9375rem] text-ink-muted">
-            Kuvaus tallentuu vain omaan historiaasi. Sitä ei liitetä lomakkeisiin eikä lähetetä tekoälylle.
-            Myöhemmin palvelu voi sen perusteella ehdottaa sopivaa lomaketta. Käytä vain keksittyjä tietoja.
+            Tallennettu kuvaus näkyy vain omassa historiassasi, eikä sitä liitetä lomakkeisiin. Jos pyydät
+            lomake-ehdotusta, kuvaus lähetetään palvelun omalle tekoälylle vain ehdotusta varten, ei ulkoisille
+            palveluille. Ehdotusta ei tallenneta. Käytä vain keksittyjä tietoja.
           </p>
           <div className="flex flex-col gap-3 border-t border-line pt-5 sm:flex-row sm:items-center">
             <button type="submit" disabled={pending} className={`w-full sm:w-auto ${primaryButton}`}>
               {pending ? "Tallennetaan…" : "Tallenna kuvaus"}
+            </button>
+            <button
+              ref={recommendButtonRef}
+              type="button"
+              onClick={handleRecommend}
+              disabled={recommend.step === "loading"}
+              className={`w-full sm:w-auto ${secondaryButton} disabled:cursor-wait`}
+            >
+              {recommend.step === "loading" ? "Haetaan ehdotusta…" : "Ehdota sopivaa lomaketta"}
             </button>
             <p role="status" className="font-semibold text-brand empty:hidden">
               {saved}
             </p>
           </div>
         </form>
+        <FormRecommendation state={recommend} onDismiss={dismissRecommendation} />
       </section>
 
       <section aria-labelledby="history-heading">
