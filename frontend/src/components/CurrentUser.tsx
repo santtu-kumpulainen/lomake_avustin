@@ -46,6 +46,15 @@ export function CurrentUser() {
       title: "Täytä lomake",
       text: "Valitse lomake tai jatka keskeneräistä luonnosta.",
     },
+    ...(user.role === "USER"
+      ? [
+          {
+            href: "/profile",
+            title: "Omat tiedot",
+            text: "Tarkista nimesi, syntymäaikasi ja puhelinnumerosi.",
+          },
+        ]
+      : []),
     ...(user.role === "ADMIN"
       ? [
           {

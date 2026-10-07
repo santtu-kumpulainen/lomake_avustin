@@ -32,6 +32,7 @@ export function AppHeader() {
   const links = user
     ? [
         { href: "/forms", label: "Lomakkeet" },
+        ...(user.role === "USER" ? [{ href: "/profile", label: "Omat tiedot" }] : []),
         ...(user.role === "ADMIN" ? [{ href: "/admin/forms", label: "Lomakepohjat" }] : []),
       ]
     : [];
