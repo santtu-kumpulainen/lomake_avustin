@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { fetchCurrentUser, logout, roleLabels, type User } from "@/lib/auth";
+import { fetchCurrentUser, roleLabels, type User } from "@/lib/auth";
+import { Chevron, Loading } from "@/components/ui/parts";
+import { primaryButton, secondaryButton } from "@/components/ui/styles";
 
-// undefined = still loading, null = not signed in.
+// Home page content for the signed-in user, or the sign-in choice. undefined = still loading.
 export function CurrentUser() {
   const [user, setUser] = useState<User | null>();
 
@@ -14,55 +16,68 @@ export function CurrentUser() {
       .catch(() => setUser(null));
   }, []);
 
-  async function handleLogout() {
-    await logout();
-    setUser(null);
-  }
-
-  if (user === undefined) {
-    return <p className="mt-4 text-sm text-neutral-500">Ladataan…</p>;
-  }
+  if (user === undefined) return <Loading />;
 
   if (!user) {
     return (
-      <div className="mt-4 flex gap-3 text-sm">
-        <Link href="/login" className="bg-neutral-900 px-4 py-2 font-medium text-white hover:bg-neutral-700">
-          Kirjaudu sisään
-        </Link>
-        <Link href="/register" className="border border-neutral-300 px-4 py-2 font-medium hover:border-neutral-900">
-          Luo tili
-        </Link>
-      </div>
+      <>
+        <h1 className="max-w-[36rem] text-[2rem] leading-tight font-bold tracking-tight text-balance sm:text-[2.5rem]">
+          Täytä sosiaali- ja terveyspalvelujen lomakkeet rauhassa
+        </h1>
+        <p className="mt-4 max-w-[36rem] text-lg leading-relaxed text-ink-muted">
+          Voit tallentaa keskeneräisen lomakkeen ja jatkaa myöhemmin, käyttää aiempia tietojasi luvallasi
+          ja pyytää selityksen kysymykseen, jota et ymmärrä. Tarkistat vastauksesi ennen lähettämistä.
+        </p>
+        <div className="mt-8 flex flex-wrap gap-3">
+          <Link href="/login" className={primaryButton}>
+            Kirjaudu sisään
+          </Link>
+          <Link href="/register" className={secondaryButton}>
+            Luo tili
+          </Link>
+        </div>
+      </>
     );
   }
 
+  const tasks = [
+    {
+      href: "/forms",
+      title: "Täytä lomake",
+      text: "Valitse lomake tai jatka keskeneräistä luonnosta.",
+    },
+    ...(user.role === "ADMIN"
+      ? [
+          {
+            href: "/admin/forms",
+            title: "Hallitse lomakepohjia",
+            text: "Luo, muokkaa ja julkaise lomakkeita käyttäjien täytettäväksi.",
+          },
+        ]
+      : []),
+  ];
+
   return (
     <>
-      <dl className="mt-4 grid grid-cols-[8rem_1fr] gap-y-2 text-sm">
-        <dt className="text-neutral-500">Sähköposti</dt>
-        <dd>{user.email}</dd>
-        <dt className="text-neutral-500">Rooli</dt>
-        <dd>
-          {roleLabels[user.role]} <span className="text-neutral-500">({user.role})</span>
-        </dd>
-      </dl>
-      <p className="mt-5 flex gap-5 text-sm">
-        <Link href="/forms" className="font-medium underline underline-offset-4">
-          Täytä lomake
-        </Link>
-        {user.role === "ADMIN" && (
-          <Link href="/admin/forms" className="font-medium underline underline-offset-4">
-            Hallitse lomakepohjia
-          </Link>
-        )}
+      <h1 className="text-[1.75rem] leading-tight font-bold tracking-tight sm:text-[2rem]">Mitä haluat tehdä?</h1>
+      <p className="mt-2 text-ink-muted">
+        Kirjautuneena {user.email} ({roleLabels[user.role].toLowerCase()})
       </p>
-      <button
-        type="button"
-        onClick={handleLogout}
-        className="mt-5 border border-neutral-300 px-4 py-2 text-sm font-medium hover:border-neutral-900"
-      >
-        Kirjaudu ulos
-      </button>
+      <ul className="mt-8 divide-y divide-line overflow-hidden rounded-md border border-line bg-surface">
+        {tasks.map((task) => (
+          <li key={task.href}>
+            <Link href={task.href} className="group flex items-center justify-between gap-4 px-5 py-5 hover:bg-canvas sm:px-6">
+              <span>
+                <span className="block text-lg font-semibold text-brand group-hover:underline group-hover:underline-offset-4">
+                  {task.title}
+                </span>
+                <span className="mt-0.5 block text-ink-muted">{task.text}</span>
+              </span>
+              <Chevron />
+            </Link>
+          </li>
+        ))}
+      </ul>
     </>
   );
 }

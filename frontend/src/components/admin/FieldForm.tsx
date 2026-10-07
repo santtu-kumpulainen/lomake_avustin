@@ -8,8 +8,8 @@ import {
   type FieldType,
   type FormField,
 } from "@/lib/forms";
-import { ErrorMessage, TextField } from "./parts";
-import { borderFor, inputClass, primaryButton, secondaryButton } from "./styles";
+import { ErrorMessage, FieldError, TextField } from "@/components/ui/parts";
+import { borderFor, hintClass, labelClass, primaryButton, secondaryButton, selectClass, inputClass } from "@/components/ui/styles";
 
 type Props = {
   idPrefix: string;
@@ -87,7 +87,7 @@ export function FieldForm({ idPrefix, field, submitLabel, pendingLabel, onSubmit
       />
 
       <div>
-        <label htmlFor={typeId} className="block text-sm font-medium">
+        <label htmlFor={typeId} className={labelClass}>
           Kentän tyyppi
         </label>
         <select
@@ -95,7 +95,7 @@ export function FieldForm({ idPrefix, field, submitLabel, pendingLabel, onSubmit
           value={fieldType}
           onChange={(event) => setFieldType(event.target.value as FieldType)}
           aria-invalid={fieldErrors.fieldType ? true : undefined}
-          className={`${inputClass} ${borderFor(fieldErrors.fieldType)}`}
+          className={`${selectClass} ${borderFor(fieldErrors.fieldType)}`}
         >
           {fieldTypes.map((type) => (
             <option key={type} value={type}>
@@ -103,46 +103,41 @@ export function FieldForm({ idPrefix, field, submitLabel, pendingLabel, onSubmit
             </option>
           ))}
         </select>
-        {fieldErrors.fieldType && <p className="mt-1.5 text-sm text-red-800">{fieldErrors.fieldType}</p>}
+        {fieldErrors.fieldType && <FieldError>{fieldErrors.fieldType}</FieldError>}
       </div>
 
       {fieldType === "SELECT" && (
         <div>
-          <label htmlFor={optionsId} className="block text-sm font-medium">
+          <label htmlFor={optionsId} className={labelClass}>
             Vaihtoehdot
           </label>
+          <p id={`${optionsId}-hint`} className={hintClass}>
+            Yksi vaihtoehto per rivi.
+          </p>
           <textarea
             id={optionsId}
             name="options"
             rows={4}
             defaultValue={field?.options?.join("\n") ?? ""}
             aria-invalid={fieldErrors.options ? true : undefined}
-            aria-describedby={`${optionsId}-${fieldErrors.options ? "error" : "hint"}`}
+            aria-describedby={`${optionsId}-hint${fieldErrors.options ? ` ${optionsId}-error` : ""}`}
             className={`${inputClass} ${borderFor(fieldErrors.options)}`}
           />
-          {fieldErrors.options ? (
-            <p id={`${optionsId}-error`} className="mt-1.5 text-sm text-red-800">
-              {fieldErrors.options}
-            </p>
-          ) : (
-            <p id={`${optionsId}-hint`} className="mt-1.5 text-sm text-neutral-500">
-              Yksi vaihtoehto per rivi.
-            </p>
-          )}
+          {fieldErrors.options && <FieldError id={`${optionsId}-error`}>{fieldErrors.options}</FieldError>}
         </div>
       )}
 
-      <label className="flex items-center gap-2 text-sm">
+      <label className="flex min-h-11 items-center gap-3">
         <input
           type="checkbox"
           name="required"
           defaultChecked={field?.required ?? false}
-          className="size-4 accent-neutral-900"
+          className="size-5 accent-brand"
         />
         Pakollinen kenttä
       </label>
 
-      <div className="flex gap-3">
+      <div className="flex flex-wrap gap-3">
         <button type="submit" disabled={pending} className={primaryButton}>
           {pending ? pendingLabel : submitLabel}
         </button>

@@ -10,8 +10,8 @@ import {
   type FieldErrors,
   type TemplateSummary,
 } from "@/lib/forms";
-import { ErrorMessage, StatusBadge, TextField } from "./parts";
-import { primaryButton, sectionHeading } from "./styles";
+import { EmptyState, ErrorMessage, Loading, StatusBadge, TextField } from "@/components/ui/parts";
+import { panel, primaryButton, sectionHeading, textLink } from "@/components/ui/styles";
 
 export function TemplateList() {
   const router = useRouter();
@@ -50,53 +50,54 @@ export function TemplateList() {
   }
 
   return (
-    <>
-      <section className="mt-10 border-t border-neutral-200 pt-6">
-        <h2 className={sectionHeading}>Lomakepohjat</h2>
-        {loadError && <ErrorMessage className="mt-4">{loadError}</ErrorMessage>}
-        {templates === undefined && !loadError && (
-          <p className="mt-4 text-sm text-neutral-500">Ladataan…</p>
-        )}
-        {templates?.length === 0 && (
-          <p className="mt-4 text-sm text-neutral-600">Lomakepohjia ei ole vielä luotu.</p>
-        )}
-        {templates && templates.length > 0 && (
-          <table className="mt-4 w-full text-left text-sm">
-            <thead className="border-b border-neutral-200 text-neutral-500">
-              <tr>
-                <th scope="col" className="py-2 pr-4 font-medium">Nimi</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Tila</th>
-                <th scope="col" className="py-2 text-right font-medium">Kenttiä</th>
-              </tr>
-            </thead>
-            <tbody>
-              {templates.map((template) => (
-                <tr key={template.id} className="border-b border-neutral-100">
-                  <td className="py-3 pr-4">
-                    <Link
-                      href={`/admin/forms/${template.id}`}
-                      className="font-medium underline-offset-4 hover:underline"
-                    >
-                      {template.name}
-                    </Link>
-                  </td>
-                  <td className="py-3 pr-4">
-                    <StatusBadge status={template.status} label={statusLabels[template.status]} />
-                  </td>
-                  <td className="py-3 text-right tabular-nums">{template.fieldCount}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+    <div className="grid gap-12 lg:grid-cols-[minmax(0,1fr)_20rem] lg:gap-10">
+      <section aria-labelledby="templates-heading">
+        <h2 id="templates-heading" className={sectionHeading}>
+          Kaikki lomakepohjat
+        </h2>
+        <div className="mt-4">
+          {loadError && <ErrorMessage>{loadError}</ErrorMessage>}
+          {templates === undefined && !loadError && <Loading />}
+          {templates?.length === 0 && (
+            <EmptyState title="Lomakepohjia ei ole vielä luotu.">Luo ensimmäinen pohja lomakkeella.</EmptyState>
+          )}
+          {templates && templates.length > 0 && (
+            <div className={`overflow-hidden ${panel}`}>
+              <table className="w-full text-left">
+                <thead className="border-b border-line bg-canvas text-[0.9375rem] text-ink-muted">
+                  <tr>
+                    <th scope="col" className="px-4 py-2.5 font-semibold sm:px-5">Nimi</th>
+                    <th scope="col" className="px-2 py-2.5 font-semibold">Tila</th>
+                    <th scope="col" className="px-4 py-2.5 text-right font-semibold sm:px-5">Kenttiä</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {templates.map((template) => (
+                    <tr key={template.id} className="align-top">
+                      <td className="px-4 py-3.5 sm:px-5">
+                        <Link href={`/admin/forms/${template.id}`} className={`${textLink} wrap-anywhere`}>
+                          {template.name}
+                        </Link>
+                      </td>
+                      <td className="px-2 py-3.5">
+                        <StatusBadge status={template.status} label={statusLabels[template.status]} />
+                      </td>
+                      <td className="px-4 py-3.5 text-right tabular-nums sm:px-5">{template.fieldCount}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </section>
 
-      <section className="mt-10 border-t border-neutral-200 pt-6">
-        <h2 className={sectionHeading}>Uusi lomakepohja</h2>
-        <p className="mt-2 text-sm text-neutral-600">
-          Uusi pohja tallennetaan luonnoksena. Kentät lisätään seuraavassa vaiheessa.
-        </p>
-        <form onSubmit={handleCreate} noValidate className="mt-6 space-y-5">
+      <section aria-labelledby="new-template-heading" className="lg:pt-0">
+        <h2 id="new-template-heading" className={sectionHeading}>
+          Uusi lomakepohja
+        </h2>
+        <p className="mt-1 text-ink-muted">Pohja tallennetaan luonnoksena. Kentät lisätään seuraavaksi.</p>
+        <form onSubmit={handleCreate} noValidate className={`mt-4 space-y-5 px-4 py-5 sm:px-5 ${panel}`}>
           {formError && <ErrorMessage>{formError}</ErrorMessage>}
           <TextField name="name" label="Nimi" error={fieldErrors.name} />
           <TextField
@@ -106,11 +107,11 @@ export function TemplateList() {
             multiline
             error={fieldErrors.description}
           />
-          <button type="submit" disabled={pending} className={primaryButton}>
+          <button type="submit" disabled={pending} className={`w-full ${primaryButton}`}>
             {pending ? "Luodaan…" : "Luo luonnos"}
           </button>
         </form>
       </section>
-    </>
+    </div>
   );
 }

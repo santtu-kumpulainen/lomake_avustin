@@ -1,4 +1,5 @@
 import { CurrentUser } from "@/components/CurrentUser";
+import { Page } from "@/components/ui/parts";
 
 // Rendered per request so the status reflects the backend right now.
 export const dynamic = "force-dynamic";
@@ -18,34 +19,29 @@ async function getHealth(): Promise<Health | null> {
   }
 }
 
+const statusText = (value: string) => (value === "ok" ? "toiminnassa" : value);
+
 export default async function Home() {
   const health = await getHealth();
+  const healthy = health?.status === "ok" && health.database === "ok";
 
   return (
-    <main className="mx-auto w-full max-w-2xl px-6 py-16">
-      <h1 className="text-3xl font-semibold tracking-tight">Lomakeavustin</h1>
-      <p className="mt-2 text-neutral-600">
-        MVP. Käyttää vain synteettistä dataa.
-      </p>
+    <Page>
+      <CurrentUser />
 
-      <section className="mt-10 border-t border-neutral-200 pt-6">
-        <h2 className="text-sm font-medium uppercase tracking-wide text-neutral-500">
-          Kirjautuminen
+      {/* Kept for the MVP demo: shows at a glance whether the backend and database respond. */}
+      <section aria-labelledby="status-heading" className="mt-16 border-t border-line pt-6 text-sm">
+        <h2 id="status-heading" className="font-semibold">
+          Palvelun tila
         </h2>
-        <CurrentUser />
-      </section>
-
-      <section className="mt-10 border-t border-neutral-200 pt-6">
-        <h2 className="text-sm font-medium uppercase tracking-wide text-neutral-500">
-          Järjestelmän tila
-        </h2>
-        <dl className="mt-4 grid grid-cols-[8rem_1fr] gap-y-2 text-sm">
-          <dt className="text-neutral-500">Backend</dt>
-          <dd>{health ? health.status : "ei yhteyttä"}</dd>
-          <dt className="text-neutral-500">Tietokanta</dt>
-          <dd>{health ? health.database : "tuntematon"}</dd>
+        <dl className="mt-2 grid grid-cols-[7rem_1fr] gap-y-1 text-ink-muted">
+          <dt>Taustapalvelu</dt>
+          <dd>{health ? statusText(health.status) : "ei yhteyttä"}</dd>
+          <dt>Tietokanta</dt>
+          <dd>{health ? statusText(health.database) : "tuntematon"}</dd>
         </dl>
+        {!healthy && <p className="mt-2 font-semibold text-danger">Palvelussa on häiriö. Kaikki toiminnot eivät ehkä toimi.</p>}
       </section>
-    </main>
+    </Page>
   );
 }

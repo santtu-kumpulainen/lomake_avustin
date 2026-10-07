@@ -21,8 +21,8 @@ import {
   type FormTemplate,
 } from "@/lib/forms";
 import { FieldForm } from "./FieldForm";
-import { ErrorMessage, StatusBadge, TextField } from "./parts";
-import { primaryButton, secondaryButton, sectionHeading, smallButton } from "./styles";
+import { Badge, EmptyState, ErrorMessage, Loading, PageHeader, StatusBadge, TextField } from "@/components/ui/parts";
+import { panel, primaryButton, secondaryButton, sectionHeading, smallButton } from "@/components/ui/styles";
 
 type TemplateResult = ApiResult<{ template: FormTemplate }>;
 
@@ -63,8 +63,8 @@ export function TemplateEditor({ id }: { id: number }) {
     setBusy(false);
   }
 
-  if (loadError) return <ErrorMessage className="mt-8">{loadError}</ErrorMessage>;
-  if (!template) return <p className="mt-8 text-sm text-neutral-500">Ladataan…</p>;
+  if (loadError) return <ErrorMessage>{loadError}</ErrorMessage>;
+  if (!template) return <Loading />;
 
   const isDraft = template.status === "DRAFT";
   const fields = template.fields;
@@ -113,144 +113,164 @@ export function TemplateEditor({ id }: { id: number }) {
 
   return (
     <>
-      <div className="mt-6 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight">{template.name}</h1>
-          <div className="mt-3">
-            <StatusBadge status={template.status} label={statusLabels[template.status]} />
+      <PageHeader
+        title={template.name}
+        meta={<StatusBadge status={template.status} label={statusLabels[template.status]} />}
+        lead={
+          <p aria-live="polite" className="text-base">
+            {isDraft
+              ? "Luonnos ei näy käyttäjille. Muutokset tallentuvat luonnokseen, kunnes julkaiset lomakkeen."
+              : "Julkaistu lomake näkyy käyttäjille. Palauta se luonnokseksi, jos haluat muokata sitä."}
+          </p>
+        }
+        actions={
+          isDraft ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => runAction(() => publishTemplate(id))}
+              className={primaryButton}
+            >
+              Julkaise
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => runAction(() => unpublishTemplate(id))}
+              className={secondaryButton}
+            >
+              Palauta luonnokseksi
+            </button>
+          )
+        }
+      />
+
+      {actionError && <ErrorMessage className="mb-8">{actionError}</ErrorMessage>}
+
+      <div className="space-y-12">
+        <section aria-labelledby="details-heading">
+          <h2 id="details-heading" className={sectionHeading}>
+            Perustiedot
+          </h2>
+          <div className={`mt-4 px-4 py-5 sm:px-6 ${panel}`}>
+            {isDraft ? (
+              // key resets the uncontrolled inputs after the saved values come back.
+              <form key={template.updatedAt} onSubmit={handleDetails} noValidate className="space-y-5">
+                {detailErrors.form && <ErrorMessage>{detailErrors.form}</ErrorMessage>}
+                <TextField name="name" label="Nimi" defaultValue={template.name} error={detailErrors.name} />
+                <TextField
+                  name="description"
+                  label="Kuvaus"
+                  optional
+                  multiline
+                  defaultValue={template.description}
+                  error={detailErrors.description}
+                />
+                <div className="flex flex-wrap items-center gap-4">
+                  <button type="submit" className={secondaryButton}>
+                    Tallenna luonnos
+                  </button>
+                  {detailsSaved && (
+                    <p role="status" className="font-semibold text-brand">
+                      Tallennettu.
+                    </p>
+                  )}
+                </div>
+              </form>
+            ) : (
+              <dl className="space-y-3">
+                <div>
+                  <dt className="text-[0.9375rem] text-ink-muted">Nimi</dt>
+                  <dd className="font-semibold">{template.name}</dd>
+                </div>
+                <div>
+                  <dt className="text-[0.9375rem] text-ink-muted">Kuvaus</dt>
+                  <dd className="whitespace-pre-line">{template.description ?? "Ei kuvausta."}</dd>
+                </div>
+              </dl>
+            )}
           </div>
-        </div>
-        {isDraft ? (
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => runAction(() => publishTemplate(id))}
-            className={primaryButton}
-          >
-            Julkaise
-          </button>
-        ) : (
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => runAction(() => unpublishTemplate(id))}
-            className={secondaryButton}
-          >
-            Palauta luonnokseksi
-          </button>
+        </section>
+
+        <section aria-labelledby="fields-heading">
+          <h2 id="fields-heading" className={sectionHeading}>
+            Kentät
+          </h2>
+          <div className="mt-4">
+            {fields.length === 0 ? (
+              <EmptyState title="Kenttiä ei ole vielä.">Lisää vähintään yksi kenttä ennen julkaisua.</EmptyState>
+            ) : (
+              <ol className={`divide-y divide-line ${panel}`}>
+                {fields.map((field, index) => (
+                  <li key={field.id} className={`px-4 py-4 sm:px-6 ${editingFieldId === field.id ? "bg-canvas" : ""}`}>
+                    {editingFieldId === field.id ? (
+                      <FieldForm
+                        idPrefix={`edit-${field.id}-`}
+                        field={field}
+                        submitLabel="Tallenna kenttä"
+                        pendingLabel="Tallennetaan…"
+                        onSubmit={async (input: FieldInput) => {
+                          const error = apply(await updateField(id, field.id, input));
+                          if (!error) setEditingFieldId(undefined);
+                          return error;
+                        }}
+                        onCancel={() => setEditingFieldId(undefined)}
+                      />
+                    ) : (
+                      <FieldRow
+                        field={field}
+                        number={index + 1}
+                        editable={isDraft}
+                        busy={busy}
+                        isFirst={index === 0}
+                        isLast={index === fields.length - 1}
+                        onMoveUp={() => move(index, -1)}
+                        onMoveDown={() => move(index, 1)}
+                        onEdit={() => setEditingFieldId(field.id)}
+                        onDelete={() => handleDeleteField(field)}
+                      />
+                    )}
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
+        </section>
+
+        {isDraft && (
+          <section aria-labelledby="add-field-heading">
+            <h2 id="add-field-heading" className={sectionHeading}>
+              Lisää kenttä
+            </h2>
+            <div className={`mt-4 px-4 py-5 sm:px-6 ${panel}`}>
+              <FieldForm
+                idPrefix="new-"
+                submitLabel="Lisää kenttä"
+                pendingLabel="Lisätään…"
+                onSubmit={async (input) => apply(await addField(id, input))}
+              />
+            </div>
+          </section>
+        )}
+
+        {isDraft && (
+          <section aria-labelledby="delete-heading" className="border-t border-line pt-6">
+            <h2 id="delete-heading" className="font-bold">
+              Poista lomakepohja
+            </h2>
+            <p className="mt-1 text-ink-muted">Pohja poistetaan kenttineen. Poistoa ei voi perua.</p>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={handleDeleteTemplate}
+              className={`mt-3 ${secondaryButton} border-danger/60 text-danger hover:border-danger hover:bg-danger-tint`}
+            >
+              Poista lomakepohja
+            </button>
+          </section>
         )}
       </div>
-
-      <p className="mt-4 text-sm text-neutral-600" aria-live="polite">
-        {isDraft
-          ? "Luonnos ei näy käyttäjille. Muutokset tallentuvat luonnokseen, kunnes julkaiset lomakkeen."
-          : "Julkaistu lomake näkyy käyttäjille. Palauta se luonnokseksi, jos haluat muokata sitä."}
-      </p>
-
-      {actionError && <ErrorMessage className="mt-6">{actionError}</ErrorMessage>}
-
-      <section className="mt-10 border-t border-neutral-200 pt-6">
-        <h2 className={sectionHeading}>Perustiedot</h2>
-        {isDraft ? (
-          // key resets the uncontrolled inputs after the saved values come back.
-          <form key={template.updatedAt} onSubmit={handleDetails} noValidate className="mt-6 space-y-5">
-            {detailErrors.form && <ErrorMessage>{detailErrors.form}</ErrorMessage>}
-            <TextField name="name" label="Nimi" defaultValue={template.name} error={detailErrors.name} />
-            <TextField
-              name="description"
-              label="Kuvaus"
-              optional
-              multiline
-              defaultValue={template.description}
-              error={detailErrors.description}
-            />
-            <div className="flex items-center gap-4">
-              <button type="submit" className={secondaryButton}>
-                Tallenna luonnos
-              </button>
-              {detailsSaved && (
-                <p role="status" className="text-sm text-neutral-600">
-                  Tallennettu.
-                </p>
-              )}
-            </div>
-          </form>
-        ) : (
-          <p className="mt-4 whitespace-pre-line text-sm text-neutral-700">
-            {template.description ?? "Ei kuvausta."}
-          </p>
-        )}
-      </section>
-
-      <section className="mt-10 border-t border-neutral-200 pt-6">
-        <h2 className={sectionHeading}>Kentät</h2>
-        {fields.length === 0 ? (
-          <p className="mt-4 text-sm text-neutral-600">
-            Kenttiä ei ole vielä. Lisää vähintään yksi kenttä ennen julkaisua.
-          </p>
-        ) : (
-          <ol className="mt-4 divide-y divide-neutral-200 border-y border-neutral-200">
-            {fields.map((field, index) => (
-              <li key={field.id} className="py-4">
-                {editingFieldId === field.id ? (
-                  <FieldForm
-                    idPrefix={`edit-${field.id}-`}
-                    field={field}
-                    submitLabel="Tallenna kenttä"
-                    pendingLabel="Tallennetaan…"
-                    onSubmit={async (input: FieldInput) => {
-                      const error = apply(await updateField(id, field.id, input));
-                      if (!error) setEditingFieldId(undefined);
-                      return error;
-                    }}
-                    onCancel={() => setEditingFieldId(undefined)}
-                  />
-                ) : (
-                  <FieldRow
-                    field={field}
-                    number={index + 1}
-                    editable={isDraft}
-                    busy={busy}
-                    isFirst={index === 0}
-                    isLast={index === fields.length - 1}
-                    onMoveUp={() => move(index, -1)}
-                    onMoveDown={() => move(index, 1)}
-                    onEdit={() => setEditingFieldId(field.id)}
-                    onDelete={() => handleDeleteField(field)}
-                  />
-                )}
-              </li>
-            ))}
-          </ol>
-        )}
-      </section>
-
-      {isDraft && (
-        <section className="mt-10 border-t border-neutral-200 pt-6">
-          <h2 className={sectionHeading}>Lisää kenttä</h2>
-          <div className="mt-6">
-            <FieldForm
-              idPrefix="new-"
-              submitLabel="Lisää kenttä"
-              pendingLabel="Lisätään…"
-              onSubmit={async (input) => apply(await addField(id, input))}
-            />
-          </div>
-        </section>
-      )}
-
-      {isDraft && (
-        <section className="mt-16 border-t border-neutral-200 pt-6">
-          <button
-            type="button"
-            disabled={busy}
-            onClick={handleDeleteTemplate}
-            className="text-sm font-medium text-red-800 underline underline-offset-4 hover:text-red-950 disabled:opacity-60"
-          >
-            Poista lomakepohja
-          </button>
-        </section>
-      )}
     </>
   );
 }
@@ -281,29 +301,35 @@ function FieldRow({
   onDelete,
 }: FieldRowProps) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-4">
-      <div className="flex gap-3">
-        <span className="w-6 shrink-0 text-sm tabular-nums text-neutral-500">{number}.</span>
-        <div>
-          <p className="font-medium">
+    <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+      <div className="flex min-w-0 flex-1 basis-64 gap-3">
+        <span
+          aria-hidden="true"
+          className="flex size-7 shrink-0 items-center justify-center rounded-full border-[1.5px] border-line-strong text-sm font-bold tabular-nums text-ink-muted"
+        >
+          {number}
+        </span>
+        <div className="min-w-0">
+          <p className="font-semibold wrap-break-word">
             {field.label}
             {field.required && (
-              <span className="ml-1 text-red-800" aria-hidden="true">
+              <span className="ml-1 text-danger" aria-hidden="true">
                 *
               </span>
             )}
           </p>
-          <p className="mt-0.5 text-sm text-neutral-600">
-            {fieldTypeLabels[field.fieldType]} · {field.required ? "Pakollinen" : "Valinnainen"}
+          <p className="mt-1 flex flex-wrap gap-2">
+            <Badge>{fieldTypeLabels[field.fieldType]}</Badge>
+            <Badge>{field.required ? "Pakollinen" : "Valinnainen"}</Badge>
           </p>
-          {field.description && <p className="mt-1 text-sm text-neutral-500">{field.description}</p>}
+          {field.description && <p className="mt-2 text-[0.9375rem] text-ink-muted">{field.description}</p>}
           {field.options && (
-            <p className="mt-1 text-sm text-neutral-500">Vaihtoehdot: {field.options.join(", ")}</p>
+            <p className="mt-1 text-[0.9375rem] text-ink-muted">Vaihtoehdot: {field.options.join(", ")}</p>
           )}
         </div>
       </div>
       {editable && (
-        <div className="flex gap-1.5">
+        <div className="grid w-full grid-cols-4 gap-1.5 sm:flex sm:w-auto sm:gap-2 [&>button]:justify-center [&>button]:px-2 sm:[&>button]:px-3">
           <button
             type="button"
             onClick={onMoveUp}
@@ -322,10 +348,10 @@ function FieldRow({
           >
             Alas
           </button>
-          <button type="button" onClick={onEdit} disabled={busy} className={smallButton}>
+          <button type="button" onClick={onEdit} disabled={busy} aria-label={`Muokkaa: ${field.label}`} className={smallButton}>
             Muokkaa
           </button>
-          <button type="button" onClick={onDelete} disabled={busy} className={smallButton}>
+          <button type="button" onClick={onDelete} disabled={busy} aria-label={`Poista: ${field.label}`} className={smallButton}>
             Poista
           </button>
         </div>
