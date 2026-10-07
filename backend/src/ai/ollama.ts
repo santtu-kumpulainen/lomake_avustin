@@ -13,7 +13,8 @@ export class AiUnavailableError extends Error {
 // Caps generation length on the Ollama side so a request cannot run on indefinitely.
 const MAX_TOKENS = 300;
 
-export async function chat(messages: ChatMessage[]): Promise<string> {
+// `format` is Ollama's structured output: a JSON schema the reply must follow.
+export async function chat(messages: ChatMessage[], format?: object): Promise<string> {
   const { baseUrl, model, timeoutMs } = config.ai;
   if (!baseUrl || !model) throw new AiUnavailableError("not configured");
 
@@ -26,6 +27,7 @@ export async function chat(messages: ChatMessage[]): Promise<string> {
         model,
         messages,
         stream: false,
+        ...(format ? { format } : {}),
         options: { temperature: 0.2, num_predict: MAX_TOKENS },
       }),
       signal: AbortSignal.timeout(timeoutMs),

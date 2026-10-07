@@ -1,6 +1,6 @@
 # Lomakeavustin
 
-Smart form assistant. An MVP for filling in health-related pre-information forms with database-driven dynamic forms, drafts, prefill from the user's own earlier data, and a local AI that explains questions in plain language.
+Smart form assistant. An MVP for filling in health-related pre-information forms with database-driven dynamic forms, drafts, prefill from the user's own earlier data, and a local AI that explains questions in plain language and suggests a suitable form.
 
 > MVP, not a production healthcare system. The project uses **synthetic data only**. Never enter real patient or health information.
 
@@ -236,7 +236,7 @@ Customers (`USER`) describe in their own words why they are seeking help on "Mik
 
 The description is 5-2000 characters after trimming; line breaks are kept and other control characters are rejected. The content is never interpreted: no diagnosis, urgency or classification. Descriptions are stored in their own table, separate from form submissions, and cannot be edited or deleted yet.
 
-The owner always comes from the session. Any other body key (`userId`, `user_id`...) and any query parameter are rejected with `400`. `ADMIN` and `PROFESSIONAL` get `403`; professional access will be a separate, controlled feature. Descriptions are not sent to Ollama, not included in other API responses and not logged. The database pool sets `logParam: false`, so driver error messages (which the error handler logs) never contain query values such as answers or descriptions. A later AI feature may use the descriptions to suggest one of the published forms.
+The owner always comes from the session. Any other body key (`userId`, `user_id`...) and any query parameter are rejected with `400`. `ADMIN` and `PROFESSIONAL` get `403`; professional access will be a separate, controlled feature. Descriptions are not included in other API responses and not logged; they reach Ollama only when the customer asks for a form recommendation (below). The database pool sets `logParam: false`, so driver error messages (which the error handler logs) never contain query values such as answers or descriptions.
 
 ## AI question explanations
 
@@ -259,6 +259,22 @@ Recreate the backend after changing these: `docker compose up -d backend`.
 Privacy boundary: only the question text, its help text, the field type and SELECT options are sent to Ollama. Never answers, drafts, earlier submissions, user ids, emails or reference codes; any other request key is rejected with `400`. The prompt forbids diagnosis, treatment advice, invented information and answering for the user. Any Ollama failure (not configured, offline, timeout, error, invalid output) returns a generic `503` and the form stays fully usable. Explanations are not stored. Tests mock Ollama, so no running model is needed.
 
 Tested end to end with `gemma3:4b` (about 1.5 s per explanation on a 6 GB GPU). Known limitations: date questions may get relative examples such as "viime viikolla" instead of a calendar date, unclear questions tend to be interpreted rather than flagged as unclear, and some Finnish phrasing is awkward. The output is always labelled as AI-generated.
+
+## AI form recommendation
+
+On `/symptoms` the customer can choose "Ehdota sopivaa lomaketta". The backend sends the typed description and the list of published forms to the local Ollama model, which may pick one form or none. The customer sees the suggested form, its topic and a short AI reason, and decides whether to open it ("Avaa lomake" / "Ei nyt"). There is no automatic navigation, and `/forms` always works as a manual alternative.
+
+| Endpoint | Request / response |
+| --- | --- |
+| `POST /api/ai/recommend-form` | `{ description }` -> `200 { recommendation: { formId, name, category, reason } }` or `200 { recommendation: null }`; `400` validation, `401`, `403` ADMIN/PROFESSIONAL, `503 { error: "AI unavailable" }` |
+
+- `USER` only. The body may contain only `description` (same rules as `/api/symptom-descriptions`); candidate forms, owner and role are decided by the backend, so a client cannot add forms or ids.
+- Candidates are the published templates only, with `id`, `name`, `description` and topic. No fields, answers, drafts, profile, user id, email or earlier descriptions are sent.
+- Ollama is asked for structured JSON (`format`). The backend still validates the output: `formId` must be one of the candidates it sent, and the reason must be a non-empty string of at most 300 characters. Malformed output, an unknown or unpublished id, or any Ollama failure gives the generic `503`; the backend never falls back to a guessed form. `name` and `category` in the response come from the database.
+- The prompt limits the AI to choosing a form: no diagnosis, disease names, medication, treatment, urgency or service decisions, and the description is treated as data, not instructions.
+- Nothing is stored, and neither the description nor the model output is logged (only a failure category).
+
+Tested with `gemma3:4b` (about 0.6 s per request when the model is warm). Known limitation: practical questions unrelated to health (such as opening hours) tend to get the general "Vastaanoton esitiedot" form rather than no suggestion, and the reason sometimes repeats a word from the description.
 
 ## Running without Docker
 
