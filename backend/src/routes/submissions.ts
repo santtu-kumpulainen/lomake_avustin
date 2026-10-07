@@ -151,7 +151,16 @@ type SubmissionRow = {
   submitted_at: Date | null;
 };
 
-async function loadSubmission(conn: PoolConnection | typeof pool, id: number, userId: number) {
+/**
+ * The owner's submission. `withUnanswered` (detail view) also lists questions of a submitted
+ * form that were left empty, since empty optional answers are not stored as rows.
+ */
+async function loadSubmission(
+  conn: PoolConnection | typeof pool,
+  id: number,
+  userId: number,
+  { withUnanswered = false } = {},
+) {
   const rows: SubmissionRow[] = await conn.query(
     `SELECT s.id, s.form_template_id, t.name AS form_name, t.status AS form_status, s.status,
             s.reference_code, s.created_at, s.updated_at, s.submitted_at
@@ -162,15 +171,27 @@ async function loadSubmission(conn: PoolConnection | typeof pool, id: number, us
   );
   const row = rows[0];
   if (!row) return undefined;
-  const answers: { field_id: number; label: string; answer_value: string | null }[] =
-    await conn.query(
-      `SELECT a.field_id, f.label, a.answer_value
-         FROM form_answers a
-         JOIN form_fields f ON f.id = a.field_id
-        WHERE a.submission_id = ?
-        ORDER BY f.position, f.id`,
-      [row.id],
-    );
+  type AnswerRow = { field_id: number; label: string; field_type: string; answer_value: string | null };
+  const answers: AnswerRow[] =
+    withUnanswered && row.submitted_at
+      ? // Fields added to the template after the submission were never part of it, so they are left out.
+        await conn.query(
+          `SELECT f.id AS field_id, f.label, f.field_type, a.answer_value
+             FROM form_submissions s
+             JOIN form_fields f ON f.form_template_id = s.form_template_id
+             LEFT JOIN form_answers a ON a.field_id = f.id AND a.submission_id = s.id
+            WHERE s.id = ? AND (a.id IS NOT NULL OR f.created_at <= s.submitted_at)
+            ORDER BY f.position, f.id`,
+          [row.id],
+        )
+      : await conn.query(
+          `SELECT a.field_id, f.label, f.field_type, a.answer_value
+             FROM form_answers a
+             JOIN form_fields f ON f.id = a.field_id
+            WHERE a.submission_id = ?
+            ORDER BY f.position, f.id`,
+          [row.id],
+        );
   return {
     id: row.id,
     formTemplateId: row.form_template_id,
@@ -186,6 +207,7 @@ async function loadSubmission(conn: PoolConnection | typeof pool, id: number, us
     answers: answers.map((answer) => ({
       fieldId: answer.field_id,
       label: answer.label,
+      fieldType: answer.field_type,
       value: answer.answer_value,
     })),
   };
@@ -289,6 +311,38 @@ submissionsRouter.post("/draft", async (req, res) => {
     return { status: created ? 201 : 200, commit: true, body: { submission } };
   });
   res.status(outcome.status).json(outcome.body);
+});
+
+// The current user's submitted forms, newest first. No query parameters are accepted, so a
+// `userId` or similar can never select another owner; the owner comes from the session.
+submissionsRouter.get("/", async (req, res) => {
+  const unexpected = Object.keys(req.query);
+  if (unexpected.length > 0) {
+    res.status(400).json({
+      error: "Validation failed",
+      fields: Object.fromEntries(unexpected.map((key) => [key, "not_allowed"])),
+    });
+    return;
+  }
+  const rows: Pick<SubmissionRow, "id" | "form_template_id" | "form_name" | "status" | "reference_code" | "submitted_at">[] =
+    await pool.query(
+      `SELECT s.id, s.form_template_id, t.name AS form_name, s.status, s.reference_code, s.submitted_at
+         FROM form_submissions s
+         JOIN form_templates t ON t.id = s.form_template_id
+        WHERE s.user_id = ? AND s.status = 'SUBMITTED'
+        ORDER BY s.submitted_at DESC, s.id DESC`,
+      [req.user!.id],
+    );
+  res.json({
+    submissions: rows.map((row) => ({
+      id: row.id,
+      formTemplateId: row.form_template_id,
+      formName: row.form_name,
+      status: row.status,
+      referenceCode: row.reference_code,
+      submittedAt: row.submitted_at,
+    })),
+  });
 });
 
 // The current user's drafts only. Registered before "/:id" so "drafts" is not parsed as an id.
@@ -401,7 +455,7 @@ submissionsRouter.get("/previous-data", async (req, res) => {
 // Owner only. Other users get 404 so submission ids cannot be probed.
 submissionsRouter.get("/:id", async (req, res) => {
   const id = parseId(req.params.id);
-  const submission = id ? await loadSubmission(pool, id, req.user!.id) : undefined;
+  const submission = id ? await loadSubmission(pool, id, req.user!.id, { withUnanswered: true }) : undefined;
   if (!submission) {
     res.status(404).json({ error: "Not found" });
     return;

@@ -49,6 +49,11 @@ export function CurrentUser() {
     ...(user.role === "USER"
       ? [
           {
+            href: "/submissions",
+            title: "Omat lähetykset",
+            text: "Katso lähettämäsi lomakkeet, viitekoodit ja vastaukset.",
+          },
+          {
             href: "/profile",
             title: "Omat tiedot",
             text: "Tarkista nimesi, syntymäaikasi ja puhelinnumerosi.",

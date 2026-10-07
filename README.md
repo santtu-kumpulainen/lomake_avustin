@@ -182,10 +182,11 @@ Signed-in users pick a published form at `/forms` and fill it in at `/forms/[id]
 | --- | --- |
 | `POST /api/submissions` | `{ formTemplateId, answers: { [fieldId]: string } }` -> `201 { submission }` with `status: "SUBMITTED"`, `submittedAt` and a `referenceCode` such as `LA-7F42K9` |
 | `POST /api/submissions/draft` | `{ formTemplateId, answers? }` creates a draft, `{ id, answers? }` updates the user's own draft |
+| `GET /api/submissions` | The signed-in user's own submitted forms, newest first; query parameters are rejected |
 | `GET /api/submissions/drafts` | The signed-in user's drafts |
 | `GET /api/submissions/previous-data/available?formTemplateId=` | Whether the user's own earlier submission can prefill this form (`{ available, fieldCount }`, no values) |
 | `GET /api/submissions/previous-data?formTemplateId=` | The values from the user's latest own submitted form of this template, requested only after consent |
-| `GET /api/submissions/:id` | The signed-in user's own draft or submission with its answers; `404` for anyone else |
+| `GET /api/submissions/:id` | The signed-in user's own draft or submission with its answers (with field type; a submitted form also lists questions left empty); `404` for anyone else |
 | `POST /api/submissions/:id/submit` | `{ answers? }`, validates the whole draft and submits it |
 
 The backend validates every answer against the stored field definitions: required fields, numbers (a decimal comma is accepted and stored as a dot), real `YYYY-MM-DD` dates, and SELECT values from the options. Ids that are not fields of the form are rejected. Errors are `400 { error, fields: { [fieldId]: code } }`, and nothing is saved unless the whole submission is valid. Unpublished forms return `404`, also for admins.
@@ -195,6 +196,10 @@ Drafts: "Tallenna luonnos" saves an incomplete form, and the forms page lists th
 Summary: "Jatka yhteenvetoon" runs the client checks and shows every answer in form order ("Ei annettu" for empty optional fields) without sending anything. The user can go back to edit, and "Lähetä lomake" works only after the confirmation checkbox is ticked. The final submit uses the same endpoints above, so backend validation and ownership checks still decide; a server-side error returns the user to the form.
 
 Prefill: on a new form with earlier own data, the user chooses "Käytä aiempia tietojani" or "Täytä tyhjänä". Values are fetched only after consent, matched by field id within the same template, fill only empty fields, are marked "Esitäytetty aiemmista tiedoista" and stay editable. Only the user's own submitted forms are used (never drafts), any `userId` parameter is rejected, and submitting creates a new submission without changing the earlier one.
+
+## Submitted forms
+
+"Omat lähetykset" (`/submissions`) lists a customer's submitted forms with the form name, submission time, status and reference code. Opening one (`/submissions/[id]`) shows every question of the form in order with the submitted answer (dates and decimals in Finnish format, "Ei annettu" for questions left empty). Submitted forms are read-only. Only the user's own `SUBMITTED` forms are listed; another user's id gives `404`, also for `ADMIN` and `PROFESSIONAL`.
 
 ## Customer profile
 

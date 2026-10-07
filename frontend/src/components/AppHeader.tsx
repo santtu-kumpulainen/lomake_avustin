@@ -32,7 +32,12 @@ export function AppHeader() {
   const links = user
     ? [
         { href: "/forms", label: "Lomakkeet" },
-        ...(user.role === "USER" ? [{ href: "/profile", label: "Omat tiedot" }] : []),
+        ...(user.role === "USER"
+          ? [
+              { href: "/submissions", label: "Omat lähetykset" },
+              { href: "/profile", label: "Omat tiedot" },
+            ]
+          : []),
         ...(user.role === "ADMIN" ? [{ href: "/admin/forms", label: "Lomakepohjat" }] : []),
       ]
     : [];
@@ -40,14 +45,14 @@ export function AppHeader() {
 
   return (
     <header className="border-b border-line bg-surface">
-      <div className="mx-auto flex max-w-4xl flex-wrap items-center gap-x-8 gap-y-1 px-4 sm:px-6">
+      <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-8 gap-y-1 px-4 sm:px-6">
         <Link href="/" className="-ml-1 flex min-h-14 items-center gap-2.5 rounded px-1 text-lg font-bold tracking-tight">
           <Mark />
           Lomakeavustin
         </Link>
 
         {links.length > 0 && (
-          <nav aria-label="Päävalikko" className="order-last -mx-1 flex w-full gap-1 sm:order-none sm:w-auto">
+          <nav aria-label="Päävalikko" className="order-last -mx-1 flex w-full gap-0.5 sm:order-none sm:w-auto sm:gap-1">
             {links.map((link) => {
               const current = pathname === link.href || pathname.startsWith(`${link.href}/`);
               return (
@@ -55,9 +60,9 @@ export function AppHeader() {
                   key={link.href}
                   href={link.href}
                   aria-current={current ? "page" : undefined}
-                  className={`relative flex min-h-11 items-center rounded px-2 font-semibold sm:min-h-14 ${
+                  className={`relative flex min-h-11 items-center rounded px-1.5 text-[0.9375rem] font-semibold whitespace-nowrap sm:min-h-14 sm:px-2 sm:text-base ${
                     current
-                      ? "text-brand after:absolute after:inset-x-2 after:bottom-0 after:h-[3px] after:rounded-t-sm after:bg-brand"
+                      ? "text-brand after:absolute after:inset-x-1.5 sm:after:inset-x-2 after:bottom-0 after:h-[3px] after:rounded-t-sm after:bg-brand"
                       : "text-ink-muted hover:text-ink"
                   }`}
                 >
@@ -71,8 +76,8 @@ export function AppHeader() {
         <div className="ml-auto flex items-center gap-4">
           {user && (
             <>
-              <p className="hidden text-right text-sm leading-tight md:block">
-                <span className="block max-w-56 truncate font-semibold">{user.email}</span>
+              <p className="hidden text-right text-sm leading-tight lg:block">
+                <span className="block max-w-48 truncate font-semibold">{user.email}</span>
                 <span className="text-ink-subtle">{roleLabels[user.role]}</span>
               </p>
               <button
