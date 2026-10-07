@@ -164,6 +164,8 @@ describe("database", () => {
     assert.deepEqual(
       fks.map((fk) => [fk.COLUMN_NAME, fk.REFERENCED_TABLE_NAME, fk.DELETE_RULE]),
       [
+        // The creator (Issue #38) is kept as history only; removing the admin keeps the assignment.
+        ["created_by_user_id", "users", "SET NULL"],
         ["customer_user_id", "users", "CASCADE"],
         ["professional_user_id", "users", "CASCADE"],
       ],
@@ -317,7 +319,13 @@ describe("admin relationship management", () => {
 
   test("creates and removes an assignment", async () => {
     const { assignment } = await json(await assign(profB.id, custB.id), 201);
-    assert.deepEqual(assignment, { id: assignment.id, professionalId: profB.id, customerId: custB.id });
+    assert.deepEqual(assignment, {
+      id: assignment.id,
+      professionalId: profB.id,
+      customerId: custB.id,
+      purpose: null,
+      expiresAt: null,
+    });
     assert.equal((await request("GET", `/api/professional/customers/${custB.id}`, profB.cookie)).status, 200);
 
     assert.equal((await request("DELETE", `${ADMIN_PATH}/${assignment.id}`, admin.cookie)).status, 204);

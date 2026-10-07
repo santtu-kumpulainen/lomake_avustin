@@ -6,9 +6,11 @@ import {
   formatDate,
   getCustomer,
   getCustomerTimeline,
+  type CustomerAccess,
   type CustomerProfile,
   type TimelineEvent,
 } from "@/lib/professional";
+import { formatDateTime } from "@/lib/submissions";
 import { Badge, ErrorMessage, Loading, PageHeader } from "@/components/ui/parts";
 import { panel, sectionHeading } from "@/components/ui/styles";
 import { CustomerAccessState } from "./CustomerAccessState";
@@ -20,6 +22,7 @@ type Failure = { status: number; error?: string };
 export function CustomerDetail({ id }: { id: number }) {
   // undefined = still loading.
   const [customer, setCustomer] = useState<CustomerProfile>();
+  const [access, setAccess] = useState<CustomerAccess>();
   const [timeline, setTimeline] = useState<TimelineEvent[]>();
   const [failure, setFailure] = useState<Failure>();
   const [timelineError, setTimelineError] = useState(false);
@@ -32,6 +35,7 @@ export function CustomerDetail({ id }: { id: number }) {
         return;
       }
       setCustomer(result.data.customer);
+      setAccess(result.data.access);
       getCustomerTimeline(id).then((r) => (r.ok ? setTimeline(r.data.timeline) : setTimelineError(true)));
     });
   }, [id]);
@@ -43,7 +47,23 @@ export function CustomerDetail({ id }: { id: number }) {
 
   return (
     <>
-      <PageHeader title={customerName(customer)} meta={<Badge>Vain luku</Badge>} />
+      <PageHeader
+        title={customerName(customer)}
+        meta={<Badge>Vain luku</Badge>}
+        lead={
+          // Why and until when this professional has access; set by an admin.
+          access && (
+            <dl className="grid gap-x-3 text-base sm:grid-cols-[auto_minmax(0,1fr)]">
+              <dt>Käyttötarkoitus:</dt>
+              <dd className="text-ink wrap-anywhere">{access.purpose ?? "Ei annettu"}</dd>
+              <dt className="mt-1 sm:mt-0">Pääsy:</dt>
+              <dd className="text-ink">
+                {access.expiresAt ? `päättyy ${formatDateTime(access.expiresAt)}` : "voimassa toistaiseksi"}
+              </dd>
+            </dl>
+          )
+        }
+      />
 
       <div className="space-y-10">
         <section aria-labelledby="profile-heading">

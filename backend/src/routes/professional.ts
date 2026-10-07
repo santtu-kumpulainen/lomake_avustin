@@ -88,11 +88,13 @@ professionalRouter.get("/dashboard", async (_req, res) => {
 });
 
 // Assigned customers that are still customers. Roles are re-checked on every read, so an
-// assignment stops granting access if either account's role changes later.
+// assignment stops granting access if either account's role changes later. An expired assignment
+// (Issue #38) grants nothing; expiry is compared with the database clock, like sessions.
 const ASSIGNED_CUSTOMERS = `
   professional_customer_access a
   JOIN users p ON p.id = a.professional_user_id AND p.role = 'PROFESSIONAL'
-  JOIN users c ON c.id = a.customer_user_id AND c.role = 'USER'`;
+  JOIN users c ON c.id = a.customer_user_id AND c.role = 'USER'
+   AND (a.expires_at IS NULL OR a.expires_at > NOW())`;
 
 type CustomerRow = {
   id: number;
@@ -126,9 +128,9 @@ professionalRouter.get("/customers", async (req, res) => {
 professionalRouter.param("customerId", async (req, res, next, value) => {
   try {
     const customerId = parseId(value);
-    const rows: { id: number }[] = customerId
+    const rows: { id: number; purpose: string | null; expires_at: Date | null }[] = customerId
       ? await pool.query(
-          `SELECT c.id FROM ${ASSIGNED_CUSTOMERS}
+          `SELECT c.id, a.purpose, a.expires_at FROM ${ASSIGNED_CUSTOMERS}
             WHERE a.professional_user_id = ? AND a.customer_user_id = ?`,
           [req.user!.id, customerId],
         )
@@ -138,6 +140,7 @@ professionalRouter.param("customerId", async (req, res, next, value) => {
       return;
     }
     res.locals.customerId = rows[0].id;
+    res.locals.access = { purpose: rows[0].purpose, expiresAt: rows[0].expires_at };
     next();
   } catch (err) {
     next(err);
@@ -145,6 +148,8 @@ professionalRouter.param("customerId", async (req, res, next, value) => {
 });
 
 // Read-only basic profile. Email is the customer's login and is not needed here, so it is left out.
+// `access` tells the professional why and until when they may see the customer; who created the
+// assignment is admin-only management data and is not included.
 professionalRouter.get("/customers/:customerId", async (_req, res) => {
   const customerId: number = res.locals.customerId;
   const [row]: (CustomerRow & { phone: string | null })[] = await pool.query(
@@ -162,6 +167,7 @@ professionalRouter.get("/customers/:customerId", async (_req, res) => {
       dateOfBirth: row.date_of_birth,
       phone: row.phone,
     },
+    access: res.locals.access,
   });
 });
 
