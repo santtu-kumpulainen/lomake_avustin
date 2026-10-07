@@ -78,6 +78,7 @@ export function TemplateEditor({ id }: { id: number }) {
       await updateTemplate(id, {
         name: String(data.get("name") ?? ""),
         description: String(data.get("description") ?? "") || null,
+        category: String(data.get("category") ?? "") || null,
       }),
     );
     if (error) {
@@ -167,6 +168,14 @@ export function TemplateEditor({ id }: { id: number }) {
                   defaultValue={template.description}
                   error={detailErrors.description}
                 />
+                <TextField
+                  name="category"
+                  label="Aihe"
+                  optional
+                  hint="Näytetään lomakelistassa, esimerkiksi Kipu tai Lääkitys."
+                  defaultValue={template.category}
+                  error={detailErrors.category}
+                />
                 <div className="flex flex-wrap items-center gap-4">
                   <button type="submit" className={secondaryButton}>
                     Tallenna luonnos
@@ -187,6 +196,10 @@ export function TemplateEditor({ id }: { id: number }) {
                 <div>
                   <dt className="text-[0.9375rem] text-ink-muted">Kuvaus</dt>
                   <dd className="whitespace-pre-line">{template.description ?? "Ei kuvausta."}</dd>
+                </div>
+                <div>
+                  <dt className="text-[0.9375rem] text-ink-muted">Aihe</dt>
+                  <dd>{template.category ?? "Ei aihetta."}</dd>
                 </div>
               </dl>
             )}

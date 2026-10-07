@@ -39,6 +39,7 @@ export function TemplateList() {
     const result = await createTemplate({
       name: String(data.get("name") ?? ""),
       description: String(data.get("description") ?? "") || null,
+      category: String(data.get("category") ?? "") || null,
     });
     if (result.ok) {
       router.push(`/admin/forms/${result.data.template.id}`);
@@ -78,6 +79,9 @@ export function TemplateList() {
                         <Link href={`/admin/forms/${template.id}`} className={`${textLink} wrap-anywhere`}>
                           {template.name}
                         </Link>
+                        {template.category && (
+                          <span className="mt-0.5 block text-[0.9375rem] text-ink-muted">{template.category}</span>
+                        )}
                       </td>
                       <td className="px-2 py-3.5">
                         <StatusBadge status={template.status} label={statusLabels[template.status]} />
@@ -107,6 +111,7 @@ export function TemplateList() {
             multiline
             error={fieldErrors.description}
           />
+          <TextField name="category" label="Aihe" optional error={fieldErrors.category} />
           <button type="submit" disabled={pending} className={`w-full ${primaryButton}`}>
             {pending ? "Luodaan…" : "Luo luonnos"}
           </button>

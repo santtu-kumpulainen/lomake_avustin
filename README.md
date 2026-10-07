@@ -71,13 +71,13 @@ Returns `200` with `{"status":"ok","database":"ok",...}` when the backend and da
 
 ## Database
 
-The schema lives in `database/init/` (`001_schema.sql`, `002_sessions.sql`, `003_user_profile_birth_date.sql`) and is applied automatically the first time MariaDB starts with an empty volume.
+The schema lives in `database/init/` (`001_schema.sql`, `002_sessions.sql`, `003_user_profile_birth_date.sql`, `004_form_template_category.sql`) and is applied automatically the first time MariaDB starts with an empty volume.
 
 | Table | Purpose |
 | --- | --- |
 | `users` | Login identity and role (`USER`, `ADMIN`, `PROFESSIONAL`) |
 | `user_profiles` | One-to-one customer profile: first and last name, date of birth, phone |
-| `form_templates` | Reusable form definitions (`DRAFT`, `PUBLISHED`, `ARCHIVED`) |
+| `form_templates` | Reusable form definitions (`DRAFT`, `PUBLISHED`, `ARCHIVED`) with an optional category |
 | `form_fields` | Ordered fields of a template (`TEXT`, `NUMBER`, `DATE`, `SELECT`) |
 | `form_submissions` | A user's draft or submitted form with a reference code such as `LA-7F42K9` |
 | `form_answers` | One answer per field per submission, with a prefilled flag |
@@ -94,7 +94,7 @@ To add a new init file to an existing volume without deleting data, run it once 
 docker compose exec -T mariadb sh -c 'mariadb -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE"' < database/init/002_sessions.sql
 ```
 
-Existing volumes created before the customer profile need `003_user_profile_birth_date.sql` applied the same way (it only adds a nullable column).
+Existing volumes created before the customer profile need `003_user_profile_birth_date.sql` applied the same way (it only adds a nullable column). Volumes created before the demo form library need `004_form_template_category.sql` (adds the nullable `category` and `seed_key` columns).
 
 ## Authentication
 
@@ -172,11 +172,23 @@ ADMIN users manage form templates at `/admin/forms` (linked from the home page f
 | `DELETE /api/forms/:id/fields/:fieldId` | ADMIN | Delete a field |
 | `PUT /api/forms/:id/fields/order` | ADMIN | `{ fieldIds }`, must list every field of the template once |
 
-Field types are `TEXT`, `NUMBER`, `DATE` and `SELECT`. `SELECT` requires a non-empty list of unique `options`; other types must not have options. A template's structure can only be changed while it is a `DRAFT`, so published forms never change under a user filling them. Validation errors use the same `400 { error, fields }` format as authentication.
+Templates have an optional `category` (free text, max 100 characters, shown as "Aihe" on `/forms`). Field types are `TEXT`, `NUMBER`, `DATE` and `SELECT`. `SELECT` requires a non-empty list of unique `options`; other types must not have options. A template's structure can only be changed while it is a `DRAFT`, so published forms never change under a user filling them. Validation errors use the same `400 { error, fields }` format as authentication.
+
+## Demo form library
+
+Eight synthetic demo forms (Vastaanoton esitiedot, Oireiden, Kivun, Mielialan ja hyvinvoinnin, Unen ja palautumisen esitiedot, Lääkitystiedot, Allergiatiedot, Toimintakyvyn esitiedot) can be added as ordinary published templates:
+
+```bash
+docker compose exec backend npm run seed:demo-forms
+```
+
+They are self-made demonstration content, not official or clinically validated healthcare forms. The content is in `backend/src/seeds/demo-forms.ts` and is checked with the same validation as the admin API.
+
+The seed is safe to run repeatedly. Each form has a fixed `seed_key`; a form whose key already exists is skipped and never changed, so admin edits (renaming, unpublishing, field changes) survive. It never deletes or resets anything and is not run on startup. A demo form an admin has deleted is created again on the next run. Requires `004_form_template_category.sql` on existing volumes.
 
 ## Filling in forms
 
-Signed-in users pick a published form at `/forms` and fill it in at `/forms/[id]`. Fields are rendered from the template returned by the API.
+Signed-in users pick a published form at `/forms` (sorted by name, with topic, description and a topic filter) and fill it in at `/forms/[id]`. Fields are rendered from the template returned by the API.
 
 | Endpoint | Description |
 | --- | --- |

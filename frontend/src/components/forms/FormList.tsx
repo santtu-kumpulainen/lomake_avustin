@@ -5,7 +5,13 @@ import { useEffect, useState } from "react";
 import { listTemplates, type TemplateSummary } from "@/lib/forms";
 import { listDrafts, type DraftSummary } from "@/lib/submissions";
 import { Badge, Chevron, EmptyState, ErrorMessage, Loading } from "@/components/ui/parts";
-import { secondaryButton, sectionHeading, textLink } from "@/components/ui/styles";
+import { secondaryButton, sectionHeading, smallButton, textLink } from "@/components/ui/styles";
+
+const OTHER = "Muut";
+
+function topicOf(form: TemplateSummary) {
+  return form.category ?? OTHER;
+}
 
 export function FormList() {
   // undefined = still loading.
@@ -13,6 +19,8 @@ export function FormList() {
   const [drafts, setDrafts] = useState<DraftSummary[]>();
   const [status, setStatus] = useState<number>();
   const [error, setError] = useState<string>();
+  // null = all topics.
+  const [topic, setTopic] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([listTemplates(), listDrafts()]).then(([formsResult, draftsResult]) => {
@@ -22,7 +30,11 @@ export function FormList() {
         return;
       }
       // ADMIN also receives drafts from this endpoint; only published forms can be filled.
-      setForms(formsResult.data.templates.filter((t) => t.status === "PUBLISHED"));
+      setForms(
+        formsResult.data.templates
+          .filter((t) => t.status === "PUBLISHED")
+          .sort((a, b) => a.name.localeCompare(b.name, "fi")),
+      );
       setDrafts(draftsResult.ok ? draftsResult.data.drafts : []);
     });
   }, []);
@@ -39,6 +51,13 @@ export function FormList() {
   }
   if (error) return <ErrorMessage>{error}</ErrorMessage>;
   if (!forms || !drafts) return <Loading />;
+
+  const topics = [...new Set(forms.map(topicOf))].sort((a, b) =>
+    // Forms without a topic are grouped last as "Muut".
+    a === OTHER ? 1 : b === OTHER ? -1 : a.localeCompare(b, "fi"),
+  );
+  const showFilter = topics.length > 1;
+  const visible = topic && topics.includes(topic) ? forms.filter((form) => topicOf(form) === topic) : forms;
 
   return (
     <div className="space-y-12">
@@ -82,6 +101,29 @@ export function FormList() {
         <h2 id="forms-heading" className={sectionHeading}>
           Täytettävät lomakkeet
         </h2>
+        {showFilter && (
+          <div role="group" aria-labelledby="topic-filter-label" className="mt-3">
+            <p id="topic-filter-label" className="text-[0.9375rem] text-ink-muted">
+              Rajaa aiheen mukaan
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {[null, ...topics].map((value) => (
+                <button
+                  key={value ?? "all"}
+                  type="button"
+                  aria-pressed={topic === value}
+                  onClick={() => setTopic(value)}
+                  className={`${smallButton} aria-pressed:border-brand aria-pressed:bg-brand aria-pressed:text-white aria-pressed:hover:bg-brand-hover`}
+                >
+                  {value ?? "Kaikki"}
+                </button>
+              ))}
+            </div>
+            <p role="status" className="sr-only">
+              {visible.length} {visible.length === 1 ? "lomake" : "lomaketta"}
+            </p>
+          </div>
+        )}
         <div className="mt-4">
           {forms.length === 0 ? (
             <EmptyState title="Täytettäviä lomakkeita ei ole juuri nyt.">
@@ -89,13 +131,18 @@ export function FormList() {
             </EmptyState>
           ) : (
             <ul className="divide-y divide-line overflow-hidden rounded-md border border-line bg-surface">
-              {forms.map((form) => (
+              {visible.map((form) => (
                 <li key={form.id}>
                   <Link
                     href={`/forms/${form.id}`}
                     className="group flex items-center justify-between gap-4 px-5 py-5 hover:bg-canvas sm:px-6"
                   >
                     <span className="min-w-0">
+                      {form.category && (
+                        <span className="mb-1 block text-[0.9375rem] font-semibold text-ink-muted wrap-break-word">
+                          {form.category}
+                        </span>
+                      )}
                       <span className="block text-lg font-semibold text-brand wrap-break-word group-hover:underline group-hover:underline-offset-4">
                         {form.name}
                       </span>

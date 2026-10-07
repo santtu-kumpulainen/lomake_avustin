@@ -9,7 +9,8 @@
     "start": "node dist/index.js",
     "typecheck": "tsc -p tsconfig.test.json",
     "test": "node --import tsx --test --test-concurrency=1 test/*.test.ts",
-    "set-role": "tsx src/scripts/set-role.ts"
+    "set-role": "tsx src/scripts/set-role.ts",
+    "seed:demo-forms": "tsx src/scripts/seed-demo-forms.ts"
   },
   "dependencies": {
     "argon2": "^0.45.1",
