@@ -41,6 +41,15 @@ export function CurrentUser() {
   }
 
   const tasks = [
+    ...(user.role === "USER"
+      ? [
+          {
+            href: "/symptoms",
+            title: "Kerro, miksi haet apua",
+            text: "Kuvaile tilannettasi omin sanoin ja katso aiemmat kuvauksesi.",
+          },
+        ]
+      : []),
     {
       href: "/forms",
       title: "Täytä lomake",

@@ -71,7 +71,7 @@ Returns `200` with `{"status":"ok","database":"ok",...}` when the backend and da
 
 ## Database
 
-The schema lives in `database/init/` (`001_schema.sql`, `002_sessions.sql`, `003_user_profile_birth_date.sql`, `004_form_template_category.sql`) and is applied automatically the first time MariaDB starts with an empty volume.
+The schema lives in `database/init/` (`001_schema.sql`, `002_sessions.sql`, `003_user_profile_birth_date.sql`, `004_form_template_category.sql`, `005_symptom_descriptions.sql`) and is applied automatically the first time MariaDB starts with an empty volume.
 
 | Table | Purpose |
 | --- | --- |
@@ -81,6 +81,7 @@ The schema lives in `database/init/` (`001_schema.sql`, `002_sessions.sql`, `003
 | `form_fields` | Ordered fields of a template (`TEXT`, `NUMBER`, `DATE`, `SELECT`) |
 | `form_submissions` | A user's draft or submitted form with a reference code such as `LA-7F42K9` |
 | `form_answers` | One answer per field per submission, with a prefilled flag |
+| `symptom_descriptions` | A customer's own descriptions of why they seek help, newest first |
 | `customer_contacts` | Synthetic contact history for the professional view |
 | `sessions` | Login sessions (SHA-256 hash of the cookie token, expiry) |
 
@@ -94,7 +95,7 @@ To add a new init file to an existing volume without deleting data, run it once 
 docker compose exec -T mariadb sh -c 'mariadb -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE"' < database/init/002_sessions.sql
 ```
 
-Existing volumes created before the customer profile need `003_user_profile_birth_date.sql` applied the same way (it only adds a nullable column). Volumes created before the demo form library need `004_form_template_category.sql` (adds the nullable `category` and `seed_key` columns).
+Existing volumes created before the customer profile need `003_user_profile_birth_date.sql` applied the same way (it only adds a nullable column). Volumes created before the demo form library need `004_form_template_category.sql` (adds the nullable `category` and `seed_key` columns), and volumes created before the symptom descriptions need `005_symptom_descriptions.sql` (adds one table).
 
 ## Authentication
 
@@ -223,6 +224,19 @@ Signed-in customers (`USER`) see and edit their own basic information on "Omat t
 | `PUT /api/profile` | `{ firstName, lastName, dateOfBirth, phone }` replaces the user's own profile |
 
 The owner always comes from the session; the routes take no user id, and any other request key (`userId`, `email`, `role`...) is rejected with `400`. `ADMIN` and `PROFESSIONAL` get `403`. Email is the login identity from `users` and is read-only here. First and last name are required; date of birth (a real date from 1900 to today) and phone (digits with optional `+`, spaces, dashes, parentheses; 5-15 digits) are optional.
+
+## Reason for seeking help
+
+Customers (`USER`) describe in their own words why they are seeking help on "Miksi haet apua?" (`/symptoms`, linked from the home page) and see their own earlier descriptions, newest first.
+
+| Endpoint | Description |
+| --- | --- |
+| `GET /api/symptom-descriptions` | `{ symptomDescriptions: [{ id, description, createdAt }] }`, the user's own, newest first |
+| `POST /api/symptom-descriptions` | `{ description }` -> `201 { symptomDescription }` |
+
+The description is 5-2000 characters after trimming; line breaks are kept and other control characters are rejected. The content is never interpreted: no diagnosis, urgency or classification. Descriptions are stored in their own table, separate from form submissions, and cannot be edited or deleted yet.
+
+The owner always comes from the session. Any other body key (`userId`, `user_id`...) and any query parameter are rejected with `400`. `ADMIN` and `PROFESSIONAL` get `403`; professional access will be a separate, controlled feature. Descriptions are not sent to Ollama, not included in other API responses and not logged. The database pool sets `logParam: false`, so driver error messages (which the error handler logs) never contain query values such as answers or descriptions. A later AI feature may use the descriptions to suggest one of the published forms.
 
 ## AI question explanations
 
